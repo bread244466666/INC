@@ -106,8 +106,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .brand { text-align: center; margin-bottom: clamp(16px, 3vh, 32px); }
-.brand-icon svg { width: 74px; height: 74px; fill: #e4462f; filter: drop-shadow(0 0 22px rgba(228, 70, 47, 0.6)); }
-.brand-icon svg circle:not(:first-child) { fill: #0a1620; }
+.brand-icon svg { width: 74px; height: 74px; color: #e4462f; fill: #e4462f; filter: drop-shadow(0 0 22px rgba(228, 70, 47, 0.55)); }
+.brand-icon svg circle:nth-child(2) { fill: #e4462f; }
 .brand h1 {
   font-size: clamp(38px, 7vw, 74px);
   margin: 6px 0 0;
@@ -264,6 +264,7 @@ button { font-family: inherit; cursor: pointer; }
 .stat-value.dna { color: var(--dna); }
 .stat-value.dead { color: #ef6a55; }
 .stat-value.resist { color: #7fc8ee; }
+.stat-value.rec { color: #7ddb8c; }
 
 .hud-cure { flex: 0 1 260px; min-width: 150px; }
 .cure-top { display: flex; justify-content: space-between; font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 5px; }
@@ -381,11 +382,15 @@ button { font-family: inherit; cursor: pointer; }
   width: 32px; height: 32px;
   flex: 0 0 32px;
   border-radius: 7px;
-  background: rgba(90, 150, 190, 0.16);
+  background: rgba(90, 150, 190, 0.14);
   display: grid;
   place-items: center;
-  font-size: 15px;
+  color: #8fc4e4;
 }
+.uicon { width: 19px; height: 19px; display: block; }
+.upgrade.owned .upgrade-icon { background: rgba(95, 211, 196, 0.16); color: var(--dna); }
+.upgrade.locked .upgrade-icon { color: var(--muted); }
+.upgrade-cost { font-size: 11px; letter-spacing: 0.04em; }
 .upgrade-main { flex: 1; min-width: 0; }
 .upgrade-name { font-size: 13px; font-weight: 700; display: block; }
 .upgrade-desc { font-size: 11px; color: var(--muted); display: block; line-height: 1.35; margin-top: 2px; }
@@ -471,7 +476,7 @@ button { font-family: inherit; cursor: pointer; }
   white-space: nowrap;
   animation: tickerIn 0.5s ease;
 }
-#tickerText::before { content: "▌ "; color: var(--red); }
+#tickerText::before { content: ""; display: inline-block; width: 3px; height: 12px; background: var(--red); margin-right: 8px; vertical-align: -1px; }
 @keyframes tickerIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* hover card */

@@ -52,7 +52,10 @@ class Game {
         closedLand: false,
         panic: 0,
         resistance: 0,      // 0..1 — grows once the outbreak is discovered
+        recovered: 0,       // people who fought off the infection
         peakInfected: 0,    // largest simultaneous case count seen
+        detectedDay: null,  // the day this country first reported cases
+        recoveredToday: 0,  // recovered in the last simulated day (for the UI)
         immunityDeaths: 0   // deaths avoided by resistance (for the inspector)
       });
     }
@@ -97,6 +100,8 @@ class Game {
     }
 
     this.bubbles = [];
+    this.vehicles = [];      // simulated planes & ships
+    this.vehicleSeq = 0;
     // Engineered Hybrid inherits one trait from another pathogen
     this.hybridTrait = null;
     if (this.plague.id === 'hybrid') {
@@ -244,14 +249,15 @@ class Game {
   }
 
   stats() {
-    let dead = 0, infected = 0, healthy = 0, discovered = 0;
+    let dead = 0, infected = 0, healthy = 0, discovered = 0, recovered = 0;
     for (const c of this.countries.values()) {
       dead += c.dead;
       infected += c.infected;
       healthy += c.healthy;
+      recovered += c.recovered || 0;
       if (c.discovered) discovered++;
     }
-    return { dead, infected, healthy, discovered, total: this.totalPopulation };
+    return { dead, infected, healthy, recovered, discovered, total: this.totalPopulation };
   }
 
   /* ---------------- start ---------------- */
@@ -260,8 +266,8 @@ class Game {
     if (!c) return false;
     const seed = Math.max(1, Math.round(c.pop * 0.00002));
     c.infected = Math.min(c.pop, seed);
-    c.healthy = c.pop - c.infected;
-    c.discovered = true;
+    c.healthy = c.pop - c.infected - (c.recovered || 0);
+    c.detectedDay = 0;
     this.running = true;
     this.speed = DAYS_PER_SECOND[this.speedIdx];
     this.startCountry = countryName;
@@ -356,12 +362,14 @@ class Game {
 
       if (newInfections > 0) {
         c.infected += newInfections;
-        c.healthy = Math.max(0, c.pop - c.infected - c.dead);
+        c.healthy = Math.max(0, c.pop - c.infected - c.dead - (c.recovered || 0));
       }
 
       // deaths — rate rises steeply with lethality
       const lethRating = Math.max(0, eff.lethality);
-      let leth = Math.pow(lethRating / 100, 1.05) * 0.042 * (1 - c.health * 0.28);
+      let leth = Math.pow(lethRating / 100, 1.0) * 0.05 * (1 - c.health * 0.24);
+      // in a fully saturated country the outbreak resolves within months
+      if (c.healthy < c.pop * 0.002) leth *= 2.4;
 
       // an adapted population survives somewhat better, but immunity is about
       // not catching it in the first place — not surviving it once infected
@@ -370,7 +378,33 @@ class Game {
       if (newDeaths > 0) {
         c.infected -= newDeaths;
         c.dead += newDeaths;
-        c.healthy = Math.max(0, c.pop - c.infected - c.dead);
+        c.healthy = Math.max(0, c.pop - c.infected - c.dead - (c.recovered || 0));
+      }
+
+      // ---- recovery ----
+      // A fraction of the infected fight the pathogen off. Recovery is fast in
+      // healthy, wealthy countries and much faster once a cure exists.
+      const eff2 = eff;
+      const careQuality = 0.35 + c.health * 0.8 + c.wealth * 0.5;
+      let recoveryRate = 0.0011 * careQuality * (1 + c.resistance * 2.2) / Math.max(0.25, eff2.lethalityMult * 0.8);
+      // symptoms that destroy the body make recovery far less likely
+      recoveryRate /= (1 + Math.max(0, eff2.lethality) * 0.11);
+      recoveryRate *= (1 + this.researchProgress / 100 * 2.5);   // treatment improves
+      // immunity-evading abilities keep people sick for longer
+      recoveryRate *= Math.max(0.15, 1 - eff2.resistPierce * 0.75);
+      recoveryRate *= 1 / Math.max(0.4, eff2.curePersist * 0.85);
+
+      // A lethal pathogen always outpaces recovery in the end: recovery can
+      // only ever offset a bounded share of the death rate.
+      const deathPressure = Math.min(1, Math.max(0, eff2.lethality) * 0.02);
+      recoveryRate *= (1 - deathPressure * 0.92);
+      const cured = Math.min(c.infected, c.infected * Math.max(0, recoveryRate) * dt);
+      if (cured > 0) {
+        c.infected -= cured;
+        c.recovered += cured;
+        c.recoveredToday += cured;
+        c.healthy = Math.max(0, c.pop - c.infected - c.dead - c.recovered);
+        c.resistance = Math.min(0.9, c.resistance + (cured / Math.max(1, c.pop)) * 0.75);
       }
 
       if (c.infected > c.pop) c.infected = c.pop;
@@ -404,12 +438,33 @@ class Game {
       // country closes borders when panicked
       if (!c.closedAir && c.panic > 0.72) {
         c.closedAir = true; c.closedSea = true; c.closedLand = true;
+        c.closedDay = Math.floor(this.day);
         this.addNews(`${c.name} closes all borders and airports.`, 'danger');
       }
+      // ...and reopens them once the crisis eases or the shutdown is unsustainable
+      if (c.closedAir) {
+        const shutdownTooLong = this.day - (c.closedDay || 0) > 120;
+        if (c.panic < 0.45 || shutdownTooLong) {
+          c.closedAir = false; c.closedSea = false; c.closedLand = false;
+          this.addNews(`${c.name} reopens its borders.`, 'info');
+        }
+      }
 
-      if (!c.discovered && c.infected > c.pop * 0.002) {
-        c.discovered = true;
-        newlyDiscovered.push(c.name);
+      // ---- detection ----
+      // Surveillance quality decides how quickly a country notices the pathogen.
+      // Rich, well-staffed health systems spot a handful of cases within days;
+      // poor ones may miss thousands. Stealthy pathogens delay detection.
+      if (!c.discovered && c.infected > 0) {
+        const surveillance = 0.18 + c.health * 0.75 + c.wealth * 0.45;
+        const stealth = eff.stealth || 0;
+        const threshold = Math.max(3, c.pop * 0.0000035 * (1 - surveillance * 0.85) * (1 + stealth * 3.2));
+        if (c.infected > threshold) {
+          c.discovered = true;
+          c.detectedDay = Math.floor(this.day);
+          newlyDiscovered.push(c.name);
+          this.addNews(`${c.name} confirms outbreak (${fmtShort(c.infected)} cases).`, 'danger');
+          this.pushEvent({ type: 'detect', title: 'Outbreak confirmed', text: c.name });
+        }
       }
     }
 
@@ -432,43 +487,8 @@ class Game {
       }
     }
 
-    // ---- transmission to new countries ----
-    const infectedList = this.infectedCountries();
-
-    for (const src of infectedList) {
-      // a country that recently had a huge outbreak still exports the pathogen
-      // through fleeing travellers, cargo and contaminated surfaces
-      const active = Math.max(src.infected, src.peakInfected * 0.12);
-      if (active / Math.max(1, src.pop) < 0.004) continue;
-      const pressure = Math.min(1, active / src.pop * 12 + 0.15);
-
-      // land — a closed border slows traffic but never stops it completely
-      const landMult = src.closedLand ? 0.12 : 1;
-      if (landMult > 0) {
-        for (const target of this.landAdj.get(src.name) || []) {
-          const t = this.countries.get(target);
-          if (!t || t.infected > 0) continue;
-          const p = 0.013 * eff.infect * pressure * this.difficulty.spread
-            * eff.travel * eff.spread * landMult * dt;
-          if (Math.random() < p) this.infectCountry(t, src);
-        }
-      }
-
-      // air / sea
-      const hubs = this.seaAdj.get(src.name);
-      const airMult = src.closedAir ? 0.1 : 1;
-      if (hubs && airMult > 0) {
-        for (const target of hubs) {
-          const t = this.countries.get(target);
-          if (!t || t.infected > 0) continue;
-          const reach = FLIGHT_HUBS[src.name];
-          const reachFactor = reach ? reach.reach / 55 : 0.5;
-          const p = 0.0038 * eff.infect * reachFactor * pressure * this.difficulty.spread
-            * eff.travel * eff.spread * airMult * dt;
-          if (Math.random() < p) this.infectCountry(t, src);
-        }
-      }
-    }
+    // ---- travel: physical planes and ships carry the pathogen ----
+    this.updateVehicles(dt, eff);
 
     // spontaneous mutation for virus
     if (this.plague.id === 'virus') {
@@ -496,14 +516,13 @@ class Game {
     this.totalInfectedNow = now.infected;
     this.peakInfected = Math.max(this.peakInfected, now.infected);
 
-    if (now.infected + now.dead >= now.total * 0.999 && now.healthy < now.total * 0.001) {
-      // still need infected to die out for a full wipe
-      if (now.infected < now.total * 0.0005) {
-        this.finish(true, 'Humanity has been wiped out. The pathogen is all that remains.');
-      }
-    }
-    if (now.dead >= now.total * 0.999) {
-      this.finish(true, 'Every last human is dead. Total extinction achieved.');
+    // Victory: society is gone. A few thousand immune survivors hiding in the
+    // ruins cannot rebuild a civilisation, so 99.9% dead counts as extinction.
+    const deadFracNow = now.dead / now.total;
+    if (deadFracNow >= 0.999) {
+      this.finish(true, `Total extinction. ${fmtShort(now.dead)} dead — the last scattered survivors cannot rebuild.`);
+    } else if (deadFracNow >= 0.995 && now.infected < now.total * 0.0005 && this.day > 200) {
+      this.finish(true, 'Humanity has collapsed. The pathogen is all that remains.');
     }
     // stalemate: the outbreak has stalled for a very long time
     if (this.day > 2600 && now.healthy > now.total * 0.002) {
@@ -527,14 +546,158 @@ class Game {
     this.emit('tick', now);
   }
 
-  infectCountry(c, src) {
+  /* ---------------- travel simulation ----------------
+     Instead of rolling a probability per country pair, real vehicles depart
+     infected countries on schedules, fly/sail for a few days, and carry the
+     pathogen to their destination. Watch them move on the map in real time.
+  ------------------------------------------------------------------ */
+  spawnInterval(eff) {
+    // more evolved pathogens travel far more often
+    return 0.26 / Math.max(0.25, eff.travel * eff.spread);
+  }
+
+  updateVehicles(dt, eff) {
+    // ---- move existing vehicles ----
+    for (const v of this.vehicles) {
+      v.progress += dt / Math.max(0.5, v.duration);
+      if (!v.arrived && v.progress >= 1) {
+        v.arrived = true;
+        this.vehicleArrives(v);
+      }
+      if (v.progress >= 1.35) v.done = true;
+    }
+    this.vehicles = this.vehicles.filter(v => !v.done);
+
+    // ---- ground traffic across land borders ----
+    // People walk, drive and truck goods across shared borders; this is how
+    // the pathogen reaches countries without airports or ports.
+    for (const c of this.countries.values()) {
+      // countries that already burned out still export the pathogen through
+      // travellers, truckers and contaminated goods
+      const active = Math.max(c.infected, (c.peakInfected || 0) * 0.1);
+      if (active <= 0) continue;
+      const frac = active / Math.max(1, c.pop);
+      if (frac < 0.0005) continue;
+      const pressure = Math.min(1, frac * 14 + 0.06);
+      for (const nName of this.landAdj.get(c.name) || []) {
+        const n = this.countries.get(nName);
+        if (!n || n.infected > 0) continue;
+        const borderEffect = c.closedLand ? 0.25 : 1;
+        const immunity = Math.max(0.06, 1 - (n.resistance || 0) * (1 - eff.resistPierce));
+        const p = 0.0022 * Math.min(3, eff.infect) * pressure * borderEffect * immunity
+          * this.difficulty.spread * eff.spread * dt;
+        if (Math.random() < p) this.infectCountry(n, c);
+      }
+    }
+
+    // ---- launch new vehicles ----
+    this.spawnTimer = (this.spawnTimer || 0) + dt;
+    const interval = this.spawnInterval(eff);
+    while (this.spawnTimer >= interval) {
+      this.spawnTimer -= interval;
+      this.spawnVehicle(eff);
+      if (this.vehicles.length > 90) break;
+    }
+  }
+
+  // weighted pick of a departure country
+  pickSourceCountry() {
+    const infected = [...this.countries.values()].filter(c => c.infected > 0);
+    if (!infected.length) return null;
+    let total = 0;
+    const weights = infected.map(c => {
+      const active = Math.max(c.infected, c.peakInfected * 0.1);
+      const w = (active / Math.max(1, c.pop)) * (1 + (FLIGHT_HUBS[c.name] ? FLIGHT_HUBS[c.name].reach / 55 : 0));
+      total += w;
+      return w;
+    });
+    if (total <= 0) return null;
+    let r = Math.random() * total;
+    for (let i = 0; i < infected.length; i++) {
+      r -= weights[i];
+      if (r <= 0) return infected[i];
+    }
+    return infected[infected.length - 1];
+  }
+
+  spawnVehicle(eff) {
+    const src = this.pickSourceCountry();
+    if (!src) return;
+
+    const wantsAir = Math.random() < 0.72;
+    const type = wantsAir ? 'plane' : 'ship';
+
+    // closed borders throttle departures, but smuggling, freight and
+    // essential travel never stop completely
+    const closure = type === 'plane' ? (src.closedAir ? 0.14 : 1) : (src.closedSea ? 0.2 : 1);
+    if (Math.random() > closure) return;
+
+    // choose a destination
+    let pool = [];
+    if (type === 'plane') {
+      const hubs = this.seaAdj.get(src.name);
+      if (hubs) pool = [...hubs];
+    } else {
+      // ships only sail to countries with a sea connection
+      const hubs = this.seaAdj.get(src.name);
+      if (hubs) pool = [...hubs].filter(n => this.seaAdj.get(n) && this.seaAdj.get(n).has(src.name));
+    }
+    if (!pool.length) pool = [...(this.seaAdj.get(src.name) || [])];
+    if (!pool.length) return;
+
+    const destName = pool[Math.floor(Math.random() * pool.length)];
+    const dest = this.countries.get(destName);
+    if (!dest) return;
+
+    // how much pathogen is aboard
+    const frac = src.infected / Math.max(1, src.pop);
+    const pressure = Math.min(1, frac * 18 + 0.22);
+    const reach = FLIGHT_HUBS[src.name];
+    const reachFactor = reach ? reach.reach / 55 : 0.5;
+    let load = pressure * Math.min(3, eff.infect) * 1.15 * (type === 'plane' ? reachFactor : reachFactor * 0.8);
+    load *= eff.resistPierce > 0 ? 1 : (1 - Math.max(0, dest.resistance) * 0.55);
+    // destination's own immunity can neutralise the arrival
+    load *= Math.max(0.05, 1 - (dest.resistance || 0) * (1 - eff.resistPierce));
+
+    this.vehicles.push({
+      id: ++this.vehicleSeq,
+      type,
+      from: src.name,
+      to: destName,
+      progress: 0,
+      duration: type === 'plane' ? 1.4 + Math.random() * 1.6 : 5 + Math.random() * 6,
+      load: Math.max(0, Math.min(1, load)),
+      infected: Math.random() < Math.min(0.93, Math.max(0, load * 1.5)),
+      arrived: false,
+      done: false,
+      seed: Math.random() * 100
+    });
+    this.emit('vehicle', { type, from: src.name, to: destName });
+  }
+
+  vehicleArrives(v) {
+    const dest = this.countries.get(v.to);
+    if (!dest) return;
+    if (v.infected && dest.infected <= 0) {
+      this.infectCountry(dest, this.countries.get(v.from), v.type);
+    } else if (dest.infected > 0 && v.infected) {
+      // a returning vehicle adds fresh cases to an ongoing outbreak
+      const add = Math.max(1, dest.pop * 0.000008 * v.load);
+      dest.infected = Math.min(dest.pop, dest.infected + add);
+      dest.healthy = Math.max(0, dest.pop - dest.infected - dest.dead - (dest.recovered || 0));
+    }
+  }
+
+  infectCountry(c, src, via) {
     const seedCount = Math.max(1, Math.min(c.pop * 0.0004, 4000));
     c.infected = seedCount;
-    c.healthy = Math.max(0, c.pop - seedCount - c.dead);
-    c.discovered = true;
+    c.healthy = Math.max(0, c.pop - seedCount - c.dead - (c.recovered || 0));
+    c.discovered = c.discovered || false;
     c.panic = Math.max(c.panic, 0.12);
-    if (src) this.addNews(`${c.name} reports its first cases — traced to ${src.name}.`, 'danger');
-    else this.addNews(`${c.name} reports its first cases.`, 'danger');
+    if (src) {
+      const route = via === 'ship' ? 'a ship from' : via === 'plane' ? 'a flight from' : null;
+      this.addNews(`${c.name}: first cases imported ${route ? route + ' ' + src.name : 'from ' + src.name}.`, 'danger');
+    } else this.addNews(`${c.name} reports its first cases.`, 'danger');
     this.emit('spread', { country: c.name, from: src ? src.name : null });
     this.pushEvent({ type: 'spread', title: 'New infection', text: `${c.name} infected` });
   }
@@ -547,22 +710,21 @@ class Game {
     const discoveredFrac = now.discovered / this.countries.size;
 
     // humanity only starts researching once the plague is noticed
-    if (!this.researchStarted && (discoveredFrac > 0.12 || now.dead > 100000 || sev > 8)) {
+    if (!this.researchStarted && (now.discovered >= 2 || now.dead > 25000 || sev > 8)) {
       this.researchStarted = true;
       this.addNews('Global health authorities begin work on a cure.', 'warn');
       this.pushEvent({ type: 'research', title: 'Cure research begins', text: 'WHO activates emergency protocol.' });
     }
     if (!this.researchStarted) return;
 
-    // research speed scales with how visible & deadly the plague is
     // humanity needs samples: live cases, or a large enough body of data
-    if (infectedFrac < 0.0015 && deadFrac < 0.01) return;
+    if (infectedFrac < 0.0002 && now.dead < 5000) return;
 
     const eff = this.getEffect();
     const visibleSeverity = sev * (1 - eff.stealth);   // stealth symptoms hide the damage
-    const visibility = 0.28 + visibleSeverity * 0.012 + deadFrac * 7 + discoveredFrac * 0.45;
-    const effort = (0.012 + infectedFrac * 0.9) * visibility;
-    let rate = effort * this.difficulty.research * this.difficulty.cureSpeed * 0.42;
+    const visibility = 0.45 + visibleSeverity * 0.02 + deadFrac * 6 + discoveredFrac * 0.9;
+    const effort = (0.05 + infectedFrac * 1.15) * visibility;
+    let rate = effort * this.difficulty.research * this.difficulty.cureSpeed * 0.17;
     rate /= Math.max(0.3, eff.curePersist);          // information warfare, prion latency, nanobots
     // as society collapses there is nobody left to staff the labs
     rate *= Math.max(0.08, 1 - deadFrac * 0.92);
@@ -656,6 +818,13 @@ class Game {
     return { fill, stroke, infected: true, resistance: res };
   }
 
+}
+
+function fmtShort(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+  return Math.round(n).toString();
 }
 
 function hexToRgb(h) {

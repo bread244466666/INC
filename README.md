@@ -72,9 +72,10 @@ The repo already contains `firebase.json` and `.firebaserc`.
 | **2. Pick a difficulty** | Casual → Normal → Brutal → Nightmare. Higher difficulty means less DNA and faster researchers. |
 | **3. Pick patient zero** | Click any country on the **map picker**, or filter by easy/poor/tropical/island/hard starts. Each pick shows its population, climate, wealth and healthcare, plus an easy→brutal start rating. |
 | **4. Evolve** | Spend DNA across three axes: **Spread** (air, water, insects, livestock, rodents, blood, extreme, zoonotic, spores, vertical, contact, climate adaptation), **Symptoms** (4 tiers, from rashes to multi-organ failure), and **Abilities** (genetics, mobility, immune evasion, pharmacology, logistics, information warfare, weaponisation). |
-| **5. Beat resistance** | Once noticed, populations build **human resistance** — strongest in rich, healthy countries. It blocks new infections and blunts lethality. Counter it with *Immunosuppression*, *Antigenic Shift*, *Drug Tolerance* and friends. |
-| **6. Survive** | Visible, deadly symptoms speed the cure up — **spread first, kill later**. |
-| **7. Win** | Kill everyone before cure research reaches 100%. |
+| **5. Watch the traffic** | Infection crosses borders aboard **actual planes and ships** you can see moving on the map. Closed borders only throttle traffic — smuggling and freight keep flowing. |
+| **6. Beat resistance** | Once noticed, populations build **human resistance** — strongest in rich, healthy countries. It blocks new infections and blunts lethality. Counter it with *Immunosuppression*, *Antigenic Shift*, *Drug Tolerance* and friends. |
+| **7. Survive** | Visible, deadly symptoms speed the cure up — **spread first, kill later**. Infected people also **recover**: strong health systems clear cases faster, and recovery accelerates once a cure exists. |
+| **8. Win** | Kill 99.9% of humanity before cure research reaches 100%. A few thousand immune survivors cannot rebuild a civilisation. |
 
 ### Controls
 
@@ -121,6 +122,49 @@ firebase.json           # Firebase Hosting config
   are, and collapses as civilization dies — you can genuinely outrun it.
 * **DNA economy.** A passive trickle plus clickable bubbles that pop up over infected countries.
 
+### Travel is simulated, not abstract
+
+There is no "roll a die per country pair" spread model. Each day, aircraft and ships are
+launched from infected countries, fly or sail along curved routes for 1.5–11 in-game days, and
+carry a **pathogen load** that is compared against the destination's immunity:
+
+* ~72% of departures are flights, the rest are ships; ships only use sea routes
+* Traffic volume scales with your `travel` / `spread` abilities, so mobility upgrades visibly
+  increase the number of vehicles on screen
+* Closed borders throttle departures to ~14% (air) / ~20% (sea) rather than blocking them, and
+  countries **reopen** their borders once panic subsides or after ~120 days
+* Infected vehicles are drawn **red**, clean ones **blue**, with a trail behind them
+* Land borders are handled separately as ground traffic, which is how landlocked countries fall
+
+### Detection and recovery
+
+* **Detection** is driven by surveillance quality. Rich, well-staffed health systems confirm an
+  outbreak from a handful of cases within days; poor ones may miss thousands. Stealthy pathogens
+  (prion, helminth) delay detection dramatically.
+* **Recovery** is real: a fraction of the infected clear the pathogen every day. Recovery is fast
+  in healthy, wealthy countries, accelerates with resistance and with cure progress, and is
+  suppressed by lethality and by immune-evasion abilities. Recovered people are counted separately
+  in the HUD, the inspector and the end-of-game summary.
+
+### Harder than before
+
+Several changes make the game substantially harder:
+
+* Cure research begins after just **two confirmed countries** and ramps with detection, so a loud
+  pathogen is punished quickly
+* Recovered populations build resistance faster, shrinking your pool of susceptible hosts
+* Full extinction now requires ~99.9% dead rather than chasing a few thousand stragglers
+* Landlocked and island nations are reachable only through the traffic network
+
+Measured with two bots across six pathogen/country pairs:
+
+| Difficulty | Naive player (ignores resistance) | Smart player |
+| --- | --- | --- |
+| Casual | 0/6 | 6/6 |
+| Normal | 0/6 | 6/6 |
+| Brutal | 0/6 | 5/6 |
+| Nightmare | 0/6 | 4/6 |
+
 ### Pathogens (10)
 
 | Pathogen | Identity |
@@ -153,26 +197,7 @@ discovered:
   Multidrug Efflux — up to 95% pierced) and slowed by `resistDrift` evolutions and by
   pathogens with high `drugResist`.
 
-### Difficulty actually matters
 
-Because resistance is wired to `difficulty.resist` and cure research to `cureSpeed`, the four
-settings diverge sharply. Measured with two bot players on the same 12 pathogen/country pairs:
-
-| Difficulty | Naive player (ignores resistance) | Smart player |
-| --- | --- | --- |
-| Casual | 100% | 100% |
-| Normal | 100% | 100% |
-| Brutal | 50% | 100% |
-| Nightmare | 17% | 58% |
-
-Playing the same lone strategy across difficulties (buy only cheap infectivity upgrades):
-
-| Difficulty | Outcome |
-| --- | --- |
-| Casual | 100% dead, win at day 1002 |
-| Normal | cure wins at day 497, only 5% dead |
-| Brutal | cure wins at day 535, only 3% dead |
-| Nightmare | cure wins at day 459, only 1% dead |
 
 ---
 
@@ -183,7 +208,7 @@ Playing the same lone strategy across difficulties (buy only cheap infectivity u
 * Cold + wealthy countries (Greenland, Canada, Russia, Nordics) need the **cold** bonuses before
   they will accept your plague.
 * At the end, once the world is fully infected, pile on lethality. There is no reason to be
-  subtle once everyone is a host.
+  subtle once everyone is a host — and with recovery in the game, waiting costs you hosts.
 * **Resistance is the real final boss.** Buy immune-evasion abilities before the death toll
   stalls — a population at 80% resistance will barely accept new infections.
 * Prion and Bio-Weapon are opposite puzzles: one hides so well the world forgets to research,
