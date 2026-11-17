@@ -772,7 +772,7 @@ const DIFFICULTIES = {
 */
 const PLAGUE_TYPES = [
   {
-    id: 'bacteria', name: 'Bacteria', icon: '🦠',
+    id: 'bacteria', name: 'Bacteria',
     desc: 'The all-rounder. Cheap to spread, easy to evolve.',
     dnaBonus: 1.0, infectMult: 1.0, lethalityMult: 1.0, severityMult: 1.0,
     drugResist: 1.0, stealthBase: 0, curePersist: 1,
@@ -780,7 +780,7 @@ const PLAGUE_TYPES = [
     notes: ['Standard DNA economy', 'No special weaknesses']
   },
   {
-    id: 'virus', name: 'Virus', icon: '🧫',
+    id: 'virus', name: 'Virus',
     desc: 'Mutates constantly — free random symptom unlocks.',
     dnaBonus: 0.85, infectMult: 1.15, lethalityMult: 1.1, severityMult: 1.0,
     drugResist: 1.1, stealthBase: 0, curePersist: 1,
@@ -788,7 +788,7 @@ const PLAGUE_TYPES = [
     notes: ['+15% infectivity', 'Free random upgrades every 45 days', '−15% DNA income']
   },
   {
-    id: 'fungus', name: 'Fungus', icon: '🍄',
+    id: 'fungus', name: 'Fungus',
     desc: 'Hard to spread, but devastating in humid climates.',
     dnaBonus: 1.15, infectMult: 0.85, lethalityMult: 1.2, severityMult: 1.0,
     drugResist: 1.15, stealthBase: 0.08, curePersist: 1.1,
@@ -796,7 +796,7 @@ const PLAGUE_TYPES = [
     notes: ['×1.9 infectivity in humid countries', '−15% base infectivity', '+15% DNA income']
   },
   {
-    id: 'parasite', name: 'Parasite', icon: '🪱',
+    id: 'parasite', name: 'Parasite',
     desc: 'Slower spread, but gains extra DNA from deaths.',
     dnaBonus: 1.3, infectMult: 0.9, lethalityMult: 1.15, severityMult: 1.0,
     drugResist: 1.2, stealthBase: 0.05, curePersist: 1,
@@ -804,7 +804,7 @@ const PLAGUE_TYPES = [
     notes: ['DNA scales with death toll', '+30% DNA income', '−10% base infectivity']
   },
   {
-    id: 'prion', name: 'Prion', icon: '🧠',
+    id: 'prion', name: 'Prion',
     desc: 'Misfolded protein. Almost impossible to detect, almost impossible to stop.',
     dnaBonus: 1.1, infectMult: 0.55, lethalityMult: 1.85, severityMult: 0.55,
     drugResist: 0.6, stealthBase: 0.5, curePersist: 1.55, prion: true,
@@ -812,7 +812,7 @@ const PLAGUE_TYPES = [
     notes: ['50% stealth — researchers barely see it', '−38% infectivity (very slow spread)', '×2.1 lethality once it takes hold', 'Human resistance cannot reduce growth', 'Cure research 55% slower']
   },
   {
-    id: 'nanobot', name: 'Nanobot Swarm', icon: '🤖',
+    id: 'nanobot', name: 'Nanobot Swarm',
     desc: 'Self-replicating machines. No immune system on Earth can respond.',
     dnaBonus: 0.9, infectMult: 1.3, lethalityMult: 1.4, severityMult: 1.0,
     drugResist: 0.15, stealthBase: 0.15, curePersist: 1.35,
@@ -820,7 +820,7 @@ const PLAGUE_TYPES = [
     notes: ['Resistance barely develops (×0.15)', '+30% base infectivity', 'Cure research 35% slower']
   },
   {
-    id: 'protist', name: 'Protozoa', icon: '🔬',
+    id: 'protist', name: 'Protozoa',
     desc: 'Single-celled survivor. Thrives in warm, wet and poor regions.',
     dnaBonus: 1.1, infectMult: 1.05, lethalityMult: 1.05, severityMult: 0.9,
     drugResist: 1.25, stealthBase: 0.1, curePersist: 1.05,
@@ -828,7 +828,7 @@ const PLAGUE_TYPES = [
     notes: ['Healthcare has almost no effect on spread', 'Favours hot + humid climates', 'Resistance develops 25% faster against it']
   },
   {
-    id: 'helminth', name: 'Helminth', icon: '🪱',
+    id: 'helminth', name: 'Helminth',
     desc: 'A parasitic worm. Few symptoms, enormous reach through water.',
     dnaBonus: 1.05, infectMult: 1.1, lethalityMult: 0.85, severityMult: 0.7,
     drugResist: 1.3, stealthBase: 0.18, curePersist: 1.15,
@@ -836,7 +836,7 @@ const PLAGUE_TYPES = [
     notes: ['Water transmission effects doubled', 'Low severity keeps research slow', '−15% lethality']
   },
   {
-    id: 'hybrid', name: 'Engineered Hybrid', icon: '⚗️',
+    id: 'hybrid', name: 'Engineered Hybrid',
     desc: 'A lab-grown chimera. Copies the best traits of two other pathogens.',
     dnaBonus: 1.0, infectMult: 1.1, lethalityMult: 1.1, severityMult: 1.0,
     drugResist: 1.0, stealthBase: 0.12, curePersist: 1.15,
@@ -844,7 +844,7 @@ const PLAGUE_TYPES = [
     notes: ['Rolls one bonus trait from another pathogen', 'Slightly better at everything', '+12% stealth']
   },
   {
-    id: 'bioengineered', name: 'Bio-Weapon', icon: '☣️',
+    id: 'bioengineered', name: 'Bio-Weapon',
     desc: 'Weaponised and released on purpose. Terrifying, and very visible.',
     dnaBonus: 0.8, infectMult: 1.25, lethalityMult: 1.6, severityMult: 1.25,
     drugResist: 0.9, stealthBase: 0, curePersist: 0.85,

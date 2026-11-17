@@ -13,11 +13,31 @@ const fmt = n => {
 };
 const fmtInt = n => Math.round(n).toLocaleString('en-US');
 
+// Inline SVG glyphs — no emoji anywhere in the UI.
 const ICONS = {
-  air: '🌬️', water: '💧', insect: '🦟', livestock: '🐄', rodent: '🐀', blood: '🩸', extreme: '☣️',
-  symptom: '🧬', genetics: '🧬', mobility: '✈️', stealth: '🕵️',
-  pharma: '💊', logistics: '📦', info: '📡', weapon: '☣️'
+  air:       '<path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h6"/>',
+  water:     '<path d="M12 3c3.5 4 6 7 6 10a6 6 0 1 1-12 0c0-3 2.5-6 6-10z"/>',
+  insect:    '<circle cx="12" cy="13" r="4"/><path d="M12 9V5M8 5l4 4 4-4"/><path d="M8 11 4 9M8 15l-4 2M16 11l4-2M16 15l4 2"/>',
+  livestock: '<path d="M4 9h16v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M7 9V6M17 9V6"/>',
+  rodent:    '<circle cx="9" cy="14" r="5"/><path d="M14 10a3 3 0 1 1 3 3"/><path d="M18 16l3 2"/>',
+  blood:     '<path d="M12 3c3 3.6 5 6.2 5 8.5A5 5 0 1 1 7 11.5C7 9.2 9 6.6 12 3z"/>',
+  extreme:   '<path d="M12 3v18M12 3l-4 4M12 3l4 4"/><circle cx="12" cy="12" r="8"/>',
+  symptom:   '<path d="M7 3c4 0 10 4 10 9s-6 9-10 9"/><path d="M17 12H7"/>',
+  genetics:  '<path d="M8 3c0 6 8 6 8 12M16 3c0 6-8 6-8 12"/><path d="M9 8h6M9 15h6"/>',
+  mobility:  '<path d="M2 12l19-7-7 19-3-8z"/>',
+  stealth:   '<path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>',
+  pharma:    '<rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-45 12 12)"/><path d="M9 15l6-6"/>',
+  logistics: '<path d="M3 8l9-4 9 4-9 4z"/><path d="M3 8v8l9 4 9-4V8"/>',
+  info:      '<circle cx="12" cy="12" r="9"/><path d="M12 8v.01M12 11v6"/>',
+  weapon:    '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.01"/>',
+  immune:    '<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/>'
 };
+
+function iconSvg(kind, cls) {
+  const body = ICONS[kind] || ICONS.symptom;
+  return `<svg class="uicon ${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+}
 
 const App = {
   game: null,
@@ -74,7 +94,7 @@ const App = {
       const b = document.createElement('button');
       b.className = 'choice' + (p.id === this.selectedPlague ? ' selected' : '');
       b.dataset.id = p.id;
-      b.innerHTML = `<span class="choice-name">${p.icon || ''} ${p.name}</span>
+      b.innerHTML = `<span class="choice-name">${p.name}</span>
         <span class="choice-desc">${p.desc}</span>
         <span class="choice-special">${p.special}</span>`;
       b.onclick = () => {
@@ -349,6 +369,7 @@ const App = {
     $('#overStats').innerHTML = `
       <div class="over-stat"><span>Deaths</span><b>${fmt(stats.dead)}</b></div>
       <div class="over-stat"><span>% of humanity</span><b>${pct}%</b></div>
+      <div class="over-stat"><span>Recovered</span><b>${fmt(stats.recovered || 0)}</b></div>
       <div class="over-stat"><span>Days survived</span><b>${Math.floor(this.game.day)}</b></div>
       <div class="over-stat"><span>Countries reached</span><b>${stats.discovered}</b></div>
       <div class="over-stat"><span>DNA earned</span><b>${Math.round(this.game.totalDnaEarned)}</b></div>
@@ -371,7 +392,8 @@ const App = {
       <div class="hc-row"><span>Infected</span><b>${fmt(c.infected)} (${infPct}%)</b></div>
       <div class="hc-row"><span>Dead</span><b>${fmt(c.dead)}</b></div>
       <div class="hc-row"><span>Climate</span><b>${c.climate}</b></div>
-      <div class="hc-row"><span>Resistance</span><b>${Math.round(c.resistance * 100)}%</b></div>`;
+      <div class="hc-row"><span>Resistance</span><b>${Math.round(c.resistance * 100)}%</b></div>
+      <div class="hc-row"><span>Recovered</span><b>${fmt(c.recovered || 0)}</b></div>`;
     card.classList.remove('hidden');
     const stage = $('#stage').getBoundingClientRect();
     const x = Math.min(p.x + 16, stage.width - 190);
@@ -429,8 +451,9 @@ const App = {
     else if (!prereqOk) cls += ' locked';
     else if (affordable) cls += ' affordable';
 
-    const icon = up.branch ? (ICONS[up.branch] || '☣️') : ICONS.symptom;
-    const right = owned ? '✓' : `${cost} DNA`;
+    const iconKind = up.branch || (up.tier === 4 ? 'weapon' : 'symptom');
+    const icon = iconSvg(iconKind);
+    const right = owned ? 'OWNED' : `${cost} DNA`;
     const needs = !prereqOk ? `<span class="upgrade-desc">Requires ${this.game.findUpgrade(up.requires)?.name || up.requires}</span>` : '';
     return `<button class="${cls}" data-upgrade="${up.id}" ${owned || !prereqOk ? 'disabled' : ''}>
       <span class="upgrade-icon">${icon}</span>
@@ -524,7 +547,9 @@ const App = {
           <div class="insp-row"><span>Dead</span><span>${fmtInt(c.dead)} (${deadPct}%)</span></div>
           <div class="insp-row"><span>Healthy</span><span>${fmtInt(c.healthy)}</span></div>
           <div class="insp-row"><span>Panic</span><span>${Math.round(c.panic * 100)}%</span></div>
+          <div class="insp-row"><span>Recovered</span><span>${fmtInt(c.recovered || 0)}</span></div>
           <div class="insp-row"><span>Human resistance</span><span>${Math.round(c.resistance * 100)}%</span></div>
+          <div class="insp-row"><span>First detected</span><span>${c.detectedDay === null ? 'not yet' : 'day ' + c.detectedDay}</span></div>
           <div style="margin-top:8px">
             <span class="badge ${c.closedAir ? 'on' : ''}">Air ${c.closedAir ? 'closed' : 'open'}</span>
             <span class="badge ${c.closedSea ? 'on' : ''}">Sea ${c.closedSea ? 'closed' : 'open'}</span>
@@ -532,6 +557,19 @@ const App = {
           </div>
         </div>`;
       }
+    }
+    const v = this.game.vehicles || [];
+    if (v.length) {
+      const air = v.filter(x => x.type === 'plane').length;
+      const sea = v.length - air;
+      const infectedFlights = v.filter(x => x.infected).length;
+      html += `<div class="inspector">
+        <h3>Global traffic</h3>
+        <div class="sub">Live movement of aircraft and shipping</div>
+        <div class="insp-row"><span>Airborne</span><span>${air} flights</span></div>
+        <div class="insp-row"><span>At sea</span><span>${sea} vessels</span></div>
+        <div class="insp-row"><span>Carrying pathogen</span><span>${infectedFlights}</span></div>
+      </div>`;
     }
     html += `<div class="branch-title">Global feed</div>`;
     if (!this.game.newsLog.length) html += `<div class="news-item">No reports yet. Evolve transmission to get started.</div>`;
@@ -562,6 +600,7 @@ const App = {
     $('#hudInfected').textContent = fmt(s.infected);
     $('#hudDead').textContent = fmt(s.dead);
     $('#hudHealthy').textContent = fmt(s.healthy);
+    $('#hudRecovered').textContent = fmt(s.recovered);
     let rsum = 0, rn = 0;
     for (const c of g.countries.values()) { rsum += c.resistance; rn++; }
     $('#hudResist').textContent = Math.round((rsum / Math.max(1, rn)) * 100) + '%';

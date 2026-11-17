@@ -10,6 +10,15 @@ const MAP_LAT_TOP = 80;      // crop the poles: Antarctica and the high arctic
 const MAP_LAT_BOTTOM = -56;  // are not part of the game board
 const MAP_H = Math.round(MAP_W * (MAP_LAT_TOP - MAP_LAT_BOTTOM) / (MAP_LON_MAX - MAP_LON_MIN));
 
+// point on a quadratic bezier at t (used for plane / ship paths)
+function quadPoint(ax, ay, cx, cy, bx, by, t) {
+  const u = 1 - t;
+  return [
+    u * u * ax + 2 * u * t * cx + t * t * bx,
+    u * u * ay + 2 * u * t * cy + t * t * by
+  ];
+}
+
 function project(lon, lat) {
   return [
     ((lon - MAP_LON_MIN) / (MAP_LON_MAX - MAP_LON_MIN)) * MAP_W,
@@ -378,6 +387,76 @@ class WorldMap {
       ctx.stroke();
     }
     this.pulses = this.pulses.filter(p => p.t <= 1);
+
+    // ---- planes and ships in transit ----
+    if (st && st.vehicles && st.vehicles.length) {
+      for (const v of st.vehicles) {
+        const a = this.byName.get(v.from);
+        const b = this.byName.get(v.to);
+        if (!a || !b) continue;
+        const ax = (a.bbox.minX + a.bbox.maxX) / 2;
+        const ay = (a.bbox.minY + a.bbox.maxY) / 2;
+        const bx = (b.bbox.minX + b.bbox.maxX) / 2;
+        const by = (b.bbox.minY + b.bbox.maxY) / 2;
+
+        const dx = bx - ax, dy = by - ay;
+        const dist = Math.hypot(dx, dy) || 1;
+        const bow = v.type === 'plane' ? Math.min(dist * 0.22, 260) : Math.min(dist * 0.1, 120);
+        const cx = (ax + bx) / 2 - (dy / dist) * bow;
+        const cy = (ay + by) / 2 + (dx / dist) * bow;
+
+        const t = Math.min(1, v.progress);
+        const p = quadPoint(ax, ay, cx, cy, bx, by, t);
+
+        if (v.progress < 1.02) {
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          const steps = 14;
+          for (let i = 1; i <= steps; i++) {
+            const q = quadPoint(ax, ay, cx, cy, bx, by, (i / steps) * t);
+            ctx.lineTo(q[0], q[1]);
+          }
+          ctx.strokeStyle = v.infected ? 'rgba(255,110,80,0.5)' : 'rgba(120,175,215,0.22)';
+          ctx.lineWidth = (v.type === 'plane' ? 1.5 : 2.2) / c.zoom;
+          if (v.type === 'ship') ctx.setLineDash([5 / c.zoom, 6 / c.zoom]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        const age = Math.max(0, v.progress - 1);
+        ctx.globalAlpha = age > 0 ? Math.max(0, 1 - age / 0.35) : 1;
+        const size = 7 / c.zoom;
+        ctx.save();
+        ctx.translate(p[0], p[1]);
+        const ahead = quadPoint(ax, ay, cx, cy, bx, by, Math.min(1, t + 0.02));
+        ctx.rotate(Math.atan2(ahead[1] - p[1], ahead[0] - p[0]));
+        ctx.beginPath();
+        if (v.type === 'plane') {
+          ctx.moveTo(size, 0);
+          ctx.lineTo(-size * 0.75, size * 0.5);
+          ctx.lineTo(-size * 0.35, 0);
+          ctx.lineTo(-size * 0.75, -size * 0.5);
+          ctx.closePath();
+          ctx.fillStyle = v.infected ? '#ff8a66' : '#9fc6e2';
+          ctx.fill();
+          if (v.infected) {
+            ctx.strokeStyle = 'rgba(255,150,110,0.95)';
+            ctx.lineWidth = 1.2 / c.zoom;
+            ctx.stroke();
+          }
+        } else {
+          ctx.moveTo(size, 0);
+          ctx.lineTo(-size, size * 0.72);
+          ctx.lineTo(-size * 0.7, 0);
+          ctx.lineTo(-size, -size * 0.72);
+          ctx.closePath();
+          ctx.fillStyle = v.infected ? '#ff8a66' : '#8fb8d4';
+          ctx.fill();
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+    }
 
     // floating DNA bubbles over infected countries
     if (st && st.bubbles && st.bubbles.length) {
