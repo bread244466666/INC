@@ -15,7 +15,8 @@ const fmtInt = n => Math.round(n).toLocaleString('en-US');
 
 const ICONS = {
   air: '🌬️', water: '💧', insect: '🦟', livestock: '🐄', rodent: '🐀', blood: '🩸', extreme: '☣️',
-  symptom: '🧬'
+  symptom: '🧬', genetics: '🧬', mobility: '✈️', stealth: '🕵️',
+  pharma: '💊', logistics: '📦', info: '📡', weapon: '☣️'
 };
 
 const App = {
@@ -26,6 +27,9 @@ const App = {
   selectedDifficulty: 'normal',
   activeTab: 'transmission',
   selectedCountry: null,
+  pickFilter: 'any',
+  pickMap: null,
+  pickedCountry: null,
   lastFrame: 0,
   tickerTimer: null,
 
@@ -41,9 +45,21 @@ const App = {
       this.map = new WorldMap($('#map'), features);
       this.map.onCountryClick = (name, p) => this.inspectCountry(name);
       this.map.onHover = (name, p) => this.showHover(name, p);
+
+      // second, independent renderer for the patient-zero picker
+      this.pickMap = new WorldMap($('#pickMap'), features);
+      this.pickMap.onCountryClick = (name) => this.pickCountry(name);
+      this.pickMap.onHover = (name) => this.pickerHover(name);
+      this.buildFilters();
+      this.pickedCountry = $('#startCountry').value;
+      this.pickMap.setMarker(this.pickedCountry);
+      this.renderPickCard(this.pickedCountry);
     }
 
-    window.addEventListener('resize', () => { if (this.map) this.map.resize(); });
+    window.addEventListener('resize', () => {
+      if (this.map) this.map.resize();
+      if (this.pickMap) this.pickMap.resize();
+    });
     document.addEventListener('keydown', e => this.onKey(e));
 
     this.loop = this.loop.bind(this);
@@ -58,7 +74,7 @@ const App = {
       const b = document.createElement('button');
       b.className = 'choice' + (p.id === this.selectedPlague ? ' selected' : '');
       b.dataset.id = p.id;
-      b.innerHTML = `<span class="choice-name">${p.name}</span>
+      b.innerHTML = `<span class="choice-name">${p.icon || ''} ${p.name}</span>
         <span class="choice-desc">${p.desc}</span>
         <span class="choice-special">${p.special}</span>`;
       b.onclick = () => {
@@ -92,13 +108,90 @@ const App = {
       sel.appendChild(o);
     });
     sel.value = 'China';
+    sel.onchange = () => {
+      this.pickedCountry = sel.value;
+      this.renderPickCard(sel.value);
+      if (this.pickMap) {
+        this.pickMap.setMarker(sel.value);
+        this.pickMap.centerOn(sel.value, Math.max(this.pickMap.camera.zoom, 1.4));
+      }
+    };
+  },
+
+  /* ---------------- patient-zero map picker ---------------- */
+  buildFilters() {
+    const box = $('#startFilters');
+    box.innerHTML = '';
+    START_ARCHETYPES.forEach(a => {
+      const b = document.createElement('button');
+      b.className = 'filter-chip' + (a.id === this.pickFilter ? ' active' : '');
+      b.textContent = a.name;
+      b.onclick = () => {
+        this.pickFilter = a.id;
+        [...box.children].forEach(c => c.classList.toggle('active', c.textContent === a.name));
+        if (this.pickMap) this.pickMap.setDimmed(this.dimmedSet());
+      };
+      box.appendChild(b);
+    });
+    this.pickMap.setDimmed(this.dimmedSet());
+  },
+
+  // returns a Set of country names to hide from the picker, or null for none
+  dimmedSet() {
+    const arch = START_ARCHETYPES.find(a => a.id === this.pickFilter);
+    if (!arch || arch.id === 'any') return null;
+    const keep = new Set(Object.keys(COUNTRIES).filter(n => arch.test(n)));
+    return { keep };
+  },
+
+  pickerHover(name) {
+    if (!name) return;
+    const c = COUNTRIES[name];
+    if (!c) return;
+    $('#pickHint').textContent = `${name} — ${fmt(c.p * 1e6)} people`;
+  },
+
+  pickCountry(name) {
+    if (!COUNTRIES[name]) return;
+    this.pickedCountry = name;
+    $('#startCountry').value = name;
+    this.renderPickCard(name);
+    if (this.pickMap) {
+      this.pickMap.setMarker(name);
+      this.pickMap.centerOn(name, Math.max(this.pickMap.camera.zoom, 1.6));
+    }
+  },
+
+  renderPickCard(name) {
+    const c = COUNTRIES[name];
+    const card = $('#pickCard');
+    if (!c) { card.classList.add('hidden'); return; }
+    // score how hard a start this is (higher = harder)
+    let score = 0;
+    score += c.w * 2.2 + c.h * 2.0;
+    score += c.p > 300 ? -1.4 : c.p > 60 ? -0.6 : c.p < 2 ? 0.8 : 0;
+    if (c.c === 'cold') score += 0.7;
+    if (['Greenland', 'Madagascar', 'New Zealand', 'Iceland', 'Australia', 'Japan'].includes(name)) score += 1.8;
+    const tier = score < 1.4 ? ['easy', 'Easy'] : score < 2.6 ? ['moderate', 'Moderate'] : score < 3.6 ? ['hard', 'Hard'] : ['brutal', 'Brutal'];
+    card.className = 'pick-card';
+    card.innerHTML = `
+      <h4>${name} <span class="difficulty-tag ${tier[0]}">${tier[1]} start</span></h4>
+      <div class="pc-grid">
+        <div class="pc-row"><span>Population</span><b>${fmt(c.p * 1e6)}</b></div>
+        <div class="pc-row"><span>Climate</span><b>${c.c}</b></div>
+        <div class="pc-row"><span>Wealth</span><b>${Math.round(c.w * 100)}%</b></div>
+        <div class="pc-row"><span>Healthcare</span><b>${Math.round(c.h * 100)}%</b></div>
+      </div>`;
   },
 
   bindMenu() {
     $('#playBtn').onclick = () => this.startGame();
     $('#randomStart').onclick = () => {
-      const names = Object.keys(COUNTRIES);
-      $('#startCountry').value = names[Math.floor(Math.random() * names.length)];
+      const arch = START_ARCHETYPES.find(a => a.id === this.pickFilter);
+      let names = Object.keys(COUNTRIES);
+      if (arch && arch.id !== 'any') names = names.filter(n => arch.test(n));
+      if (!names.length) names = Object.keys(COUNTRIES);
+      this.pickCountry(names[Math.floor(Math.random() * names.length)]);
     };
     $('#howBtn').onclick = () => $('#howModal').classList.remove('hidden');
     $('#howClose').onclick = () => $('#howModal').classList.add('hidden');
@@ -148,7 +241,7 @@ const App = {
 
   /* ---------------- game lifecycle ---------------- */
   startGame() {
-    const country = $('#startCountry').value;
+    const country = this.pickedCountry || $('#startCountry').value;
     this.game = new Game({ difficulty: this.selectedDifficulty, plague: this.selectedPlague });
     this.game.on('news', n => this.onNews(n));
     this.game.on('spread', d => {
@@ -162,6 +255,10 @@ const App = {
     this.map.camera.zoom = this.map.minZoom;
     this.map.camera.x = 0; this.map.camera.y = 0;
     this.map.clampCamera();
+
+    // show the pathogen's mechanics in the world feed
+    if (this.game.plague.notes) this.game.plague.notes.forEach(n => this.game.addNews(`${this.game.plague.name}: ${n}`, 'info'));
+    if (this.game.hybridTrait) this.game.addNews(`Hybrid acquired traits from ${this.game.hybridTrait.name}.`, 'warn');
 
     this.game.start(country);
     this.selectedCountry = null;
@@ -198,6 +295,7 @@ const App = {
     $('#overOverlay').classList.add('hidden');
     $('#game').classList.remove('active');
     $('#menu').classList.add('active');
+    if (this.pickMap) this.pickMap.resize();
     this.loadBest();
   },
 
@@ -229,6 +327,7 @@ const App = {
     if (e.key.toLowerCase() === 't') this.setTab('transmission');
     if (e.key.toLowerCase() === 'y') this.setTab('symptoms');
     if (e.key.toLowerCase() === 'w') this.setTab('news');
+    if (e.key.toLowerCase() === 'a') this.setTab('abilities');
   },
 
   /* ---------------- news ---------------- */
@@ -271,7 +370,8 @@ const App = {
       <div class="hc-row"><span>Population</span><b>${fmt(c.pop)}</b></div>
       <div class="hc-row"><span>Infected</span><b>${fmt(c.infected)} (${infPct}%)</b></div>
       <div class="hc-row"><span>Dead</span><b>${fmt(c.dead)}</b></div>
-      <div class="hc-row"><span>Climate</span><b>${c.climate}</b></div>`;
+      <div class="hc-row"><span>Climate</span><b>${c.climate}</b></div>
+      <div class="hc-row"><span>Resistance</span><b>${Math.round(c.resistance * 100)}%</b></div>`;
     card.classList.remove('hidden');
     const stage = $('#stage').getBoundingClientRect();
     const x = Math.min(p.x + 16, stage.width - 190);
@@ -293,6 +393,7 @@ const App = {
     if (!this.game) return;
     if (this.activeTab === 'transmission') body.innerHTML = this.transmissionHtml();
     else if (this.activeTab === 'symptoms') body.innerHTML = this.symptomsHtml();
+    else if (this.activeTab === 'abilities') body.innerHTML = this.abilitiesHtml();
     else body.innerHTML = this.newsHtml();
     this.bindTabEvents();
   },
@@ -362,11 +463,47 @@ const App = {
 
   symptomsHtml() {
     let html = this.sysMeters();
-    const byTier = { 1: [], 2: [], 3: [] };
-    SYMPTOMS.forEach(s => byTier[s.tier].push(s));
-    for (const tier of [1, 2, 3]) {
-      html += `<div class="branch-title">Tier ${tier}</div>`;
+    const byTier = {};
+    SYMPTOMS.forEach(s => { (byTier[s.tier] = byTier[s.tier] || []).push(s); });
+    const tierNames = { 1: 'Tier 1 · Initial', 2: 'Tier 2 · Serious', 3: 'Tier 3 · Severe', 4: 'Tier 4 · Terminal' };
+    Object.keys(byTier).sort((a, b) => a - b).forEach(tier => {
+      html += `<div class="branch-title">${tierNames[tier] || 'Tier ' + tier}</div>`;
       byTier[tier].forEach(s => { html += this.upgradeHtml(s); });
+    });
+    return html;
+  },
+
+  resistanceMeterHtml() {
+    const g = this.game;
+    let sum = 0, max = 0, n = 0, worst = null;
+    for (const c of g.countries.values()) {
+      sum += c.resistance; n++;
+      if (c.resistance > max) { max = c.resistance; worst = c.name; }
+    }
+    const avg = sum / Math.max(1, n);
+    const eff = g.getEffect();
+    return `
+      <div class="sys-meter">
+        <div class="sys-row"><span>Human resistance (world)</span><b>${Math.round(avg * 100)}%</b></div>
+        <div class="sys-bar sys-res"><i style="width:${avg * 100}%"></i></div>
+      </div>
+      <div class="sys-row" style="font-size:11px;color:var(--muted);margin:-6px 0 12px">
+        <span>Highest: ${worst || '—'} ${Math.round(max * 100)}%</span>
+        <span>You pierce ${Math.round(eff.resistPierce * 100)}%</span>
+      </div>`;
+  },
+
+  abilitiesHtml() {
+    let html = this.resistanceMeterHtml() + this.sysMeters();
+    const labels = {
+      genetics: 'Genetics', mobility: 'Mobility', stealth: 'Immune evasion',
+      pharma: 'Pharmacology', logistics: 'Logistics', info: 'Information warfare', weapon: 'Weaponisation'
+    };
+    const groups = {};
+    ABILITIES.forEach(u => { (groups[u.branch] = groups[u.branch] || []).push(u); });
+    for (const [key, ups] of Object.entries(groups)) {
+      html += `<div class="branch-title">${labels[key] || key}</div>`;
+      ups.forEach(u => { html += this.upgradeHtml(u); });
     }
     return html;
   },
@@ -387,6 +524,7 @@ const App = {
           <div class="insp-row"><span>Dead</span><span>${fmtInt(c.dead)} (${deadPct}%)</span></div>
           <div class="insp-row"><span>Healthy</span><span>${fmtInt(c.healthy)}</span></div>
           <div class="insp-row"><span>Panic</span><span>${Math.round(c.panic * 100)}%</span></div>
+          <div class="insp-row"><span>Human resistance</span><span>${Math.round(c.resistance * 100)}%</span></div>
           <div style="margin-top:8px">
             <span class="badge ${c.closedAir ? 'on' : ''}">Air ${c.closedAir ? 'closed' : 'open'}</span>
             <span class="badge ${c.closedSea ? 'on' : ''}">Sea ${c.closedSea ? 'closed' : 'open'}</span>
@@ -424,6 +562,9 @@ const App = {
     $('#hudInfected').textContent = fmt(s.infected);
     $('#hudDead').textContent = fmt(s.dead);
     $('#hudHealthy').textContent = fmt(s.healthy);
+    let rsum = 0, rn = 0;
+    for (const c of g.countries.values()) { rsum += c.resistance; rn++; }
+    $('#hudResist').textContent = Math.round((rsum / Math.max(1, rn)) * 100) + '%';
     $('#curePct').textContent = Math.round(g.researchProgress) + '%';
     $('#cureBar').style.width = g.researchProgress + '%';
     $('#cureNote').textContent = !g.researchStarted ? 'Not started'

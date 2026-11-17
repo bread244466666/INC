@@ -50,7 +50,10 @@ class Game {
         closedAir: false,
         closedSea: false,
         closedLand: false,
-        panic: 0
+        panic: 0,
+        resistance: 0,      // 0..1 — grows once the outbreak is discovered
+        peakInfected: 0,    // largest simultaneous case count seen
+        immunityDeaths: 0   // deaths avoided by resistance (for the inspector)
       });
     }
 
@@ -94,6 +97,13 @@ class Game {
     }
 
     this.bubbles = [];
+    // Engineered Hybrid inherits one trait from another pathogen
+    this.hybridTrait = null;
+    if (this.plague.id === 'hybrid') {
+      const pool = PLAGUE_TYPES.filter(t => t.id !== 'hybrid' && t.id !== 'bioengineered');
+      this.hybridTrait = pool[Math.floor(Math.random() * pool.length)];
+    }
+
     this.events = [];
     this.newsLog = [];
     this.effectCache = null;
@@ -112,7 +122,15 @@ class Game {
       severity: 0, lethality: 0,
       health: 0, wealth: 0,
       lethalityMult: this.plague.lethalityMult,
-      severityMult: this.plague.severityMult
+      severityMult: this.plague.severityMult,
+      // third axis + resistance counters
+      dnaMult: this.plague.dnaMult || 1,
+      travel: this.plague.travelMult || 1,
+      curePersist: this.plague.curePersist || 1,
+      resistDrift: 1,        // multiplier on resistance growth (lower is better)
+      resistPierce: 0,       // 0..0.95 — how much resistance is ignored
+      stealth: this.plague.stealthBase || 0, // 0..0.9 — hides severity from researchers
+      spread: 1
     };
     for (const id of this.unlocked) {
       const up = this.findUpgrade(id);
@@ -129,7 +147,37 @@ class Game {
       if (ef.wealth) e.wealth += ef.wealth;
       if (ef.lethalityMult) e.lethalityMult *= ef.lethalityMult;
       if (ef.severityMult) e.severityMult *= ef.severityMult;
+      if (ef.dnaMult) e.dnaMult *= ef.dnaMult;
+      if (ef.travel) e.travel *= ef.travel;
+      if (ef.curePersist) e.curePersist *= ef.curePersist;
+      if (ef.resistDrift) e.resistDrift *= (1 - ef.resistDrift);
+      if (ef.resistPierce) e.resistPierce += ef.resistPierce;
+      if (ef.stealth) e.stealth += ef.stealth;
+      if (ef.spread) e.spread *= ef.spread;
     }
+    // the Engineered Hybrid borrows one trait from another pathogen
+    if (this.hybridTrait) {
+      const t = this.hybridTrait;
+      e.infect *= 1 + (t.infectMult - 1) * 0.5;
+      e.lethalityMult *= 1 + (t.lethalityMult - 1) * 0.5;
+      e.dnaMult *= 1 + (t.dnaBonus - 1) * 0.5;
+    }
+
+    // a pathogen that resists drugs also slows human adaptation
+    e.resistDrift *= Math.max(0.08, (this.plague.drugResist || 1));
+    e.resistPierce = Math.min(0.95, e.resistPierce);
+    e.stealth = Math.min(0.9, e.stealth);
+
+    // ---- diminishing returns ----
+    // With 60+ upgrades available, multiplying infectivity directly would let a
+    // fully evolved pathogen reach absurd multipliers. A single upgrade keeps
+    // (almost) its printed value, but stacking many gives sharply less.
+    if (e.infect > 1) e.infect = 1 + Math.log2(e.infect) * 0.7;
+    e.infect = Math.min(e.infect, 15);
+    for (const k of ['hot', 'cold', 'arid', 'humid']) {
+      if (e[k] > 0) e[k] = Math.min(0.95, Math.pow(e[k], 0.7));
+    }
+    // severity and lethality stay linear (they are ratings, not multipliers)
     e.severity *= e.severityMult;
     e.lethality *= e.lethalityMult;
     this.effectCache = e;
@@ -137,10 +185,12 @@ class Game {
   }
 
   findUpgrade(id) {
-    return TRANSMISSIONS.find(u => u.id === id) || SYMPTOMS.find(u => u.id === id);
+    return TRANSMISSIONS.find(u => u.id === id)
+        || SYMPTOMS.find(u => u.id === id)
+        || ABILITIES.find(u => u.id === id);
   }
 
-  allUpgrades() { return [...TRANSMISSIONS, ...SYMPTOMS]; }
+  allUpgrades() { return [...TRANSMISSIONS, ...SYMPTOMS, ...ABILITIES]; }
 
   canUnlock(up) {
     if (this.over) return false;
@@ -165,7 +215,9 @@ class Game {
     if (up.effect && (up.effect.severity || up.effect.lethality)) {
       this.researchStalled = false;
       // visible symptoms drive humanity to research harder
-      this.researchProgress += up.effect.severity * 0.035 * this.difficulty.research;
+      // visible symptoms reveal the pathogen and drive research harder
+      const visible = (up.effect.severity || 0) + (up.effect.lethality || 0) * 0.4;
+      this.researchProgress += visible * 0.035 * this.difficulty.research;
     }
     return true;
   }
@@ -251,7 +303,6 @@ class Game {
     // ---- infection growth & death ----
     let dnaGain = 0;
     let newlyDiscovered = [];
-    const crossEvents = [];
 
     for (const c of this.countries.values()) {
       // a chronic reservoir always survives while hosts remain
@@ -263,12 +314,42 @@ class Game {
       }
 
       const susceptible = c.healthy / Math.max(1, c.pop);   // share still catchable
-      const resistance = 1 - c.health * 0.35 - c.wealth * 0.2;
+
+      // ---- human resistance ----
+      // Grows once the world notices the outbreak: rich, healthy and highly
+      // exposed countries adapt fastest. Rich nations mount a stronger
+      // response, poor ones adapt through sheer exposure.
+      if (c.discovered) {
+        const exposure = Math.min(1, c.infected / Math.max(1, c.pop) * 4);
+        const capacity = 0.25 + c.wealth * 0.55 + c.health * 0.35;
+        const drift = 0.0015 * capacity * (0.35 + exposure) * (this.difficulty.resist || 1);
+        const before = c.resistance;
+        c.resistance = Math.min(0.86, c.resistance + drift * eff.resistDrift * dt);
+        if (!isFinite(c.resistance) || c.resistance < 0) c.resistance = 0;
+        // announce notable adaptation milestones
+        for (const mark of [0.25, 0.5, 0.75]) {
+          if (before < mark && c.resistance >= mark) {
+            const word = mark === 0.25 ? 'partial immunity' : mark === 0.5 ? 'widespread immunity' : 'near-total immunity';
+            this.addNews(`${c.name} develops ${word} to the pathogen.`, 'warn');
+            this.pushEvent({ type: 'resistance', title: 'Human adaptation', text: `${c.name}: ${word}` });
+            break;
+          }
+        }
+      }
+
+      const residual = c.resistance * (1 - eff.resistPierce);
+      const bodyResistance = 1 - c.health * 0.35 - c.wealth * 0.2;
       const seasonMult = this.climateBonus(c, eff);
-      let rate = 0.2 * eff.infect * seasonMult
+      let rate = 0.055 * eff.infect * seasonMult
         * (this.plague.id === 'fungus' && c.climate === CLIMATE.HUMID ? 1.9 : 1)
-        * Math.max(0.15, resistance) * this.difficulty.spread;
+        * Math.max(0.15, bodyResistance) * this.difficulty.spread;
+      // protozoa ignore healthcare entirely when spreading
+      if (this.plague.id === 'protist') rate *= 1 / Math.max(0.15, bodyResistance) * 0.85;
+      // prions shrug off adaptive resistance while incubating
+      if (!this.plague.prion) rate *= Math.max(0.2, 1 - residual);
       if (c.panic > 0.4) rate *= 0.7;              // people hide, fewer contacts
+
+      if (c.infected > c.peakInfected) c.peakInfected = c.infected;
 
       // weakly damped by remaining susceptibles, so late-stage outbreaks can finish the job
       const newInfections = Math.min(c.healthy, c.infected * rate * Math.pow(Math.max(susceptible, 1e-9), 0.2) * dt);
@@ -280,8 +361,11 @@ class Game {
 
       // deaths — rate rises steeply with lethality
       const lethRating = Math.max(0, eff.lethality);
-      let leth = Math.pow(lethRating / 100, 1.05) * 0.085 * (1 - c.health * 0.28);
-      leth *= 1 / Math.max(0.55, this.difficulty.spread);
+      let leth = Math.pow(lethRating / 100, 1.05) * 0.042 * (1 - c.health * 0.28);
+
+      // an adapted population survives somewhat better, but immunity is about
+      // not catching it in the first place — not surviving it once infected
+      leth *= Math.max(0.42, 1 - c.resistance * (1 - eff.resistPierce) * 0.42);
       const newDeaths = Math.min(c.infected, c.infected * leth * dt);
       if (newDeaths > 0) {
         c.infected -= newDeaths;
@@ -293,10 +377,10 @@ class Game {
 
       // passive DNA trickle scaled by how much of the world is infected
       const frac = c.infected / Math.max(1, c.pop);
-      dnaGain += frac * 0.45 * this.difficulty.dna * this.plague.dnaBonus * dt;
+      dnaGain += frac * 0.45 * this.difficulty.dna * this.plague.dnaBonus * eff.dnaMult * dt;
 
       // DNA bubbles: infected countries occasionally yield a DNA point
-      const bubbleChance = (0.0016 + frac * 0.02) * this.difficulty.dna * this.plague.dnaBonus;
+      const bubbleChance = (0.0016 + frac * 0.02) * this.difficulty.dna * this.plague.dnaBonus * eff.dnaMult;
       const bubbleReady = !c.bubbleAt || this.day - c.bubbleAt > 6;
       if (bubbleReady && Math.random() < bubbleChance * dt) {
         const amount = frac > 0.35 ? 3 : frac > 0.08 ? 2 : 1;
@@ -334,33 +418,53 @@ class Game {
       this.totalDnaEarned += dnaGain;
     }
 
+    // ---- global preparedness ----
+    // Once the world is on alert, even uninfected countries build up immunity
+    // through vaccination, screening and behaviour change.
+    if (this.researchStarted) {
+      const alert = Math.min(1, 0.25 + this.researchProgress / 100);
+      for (const c of this.countries.values()) {
+        if (c.infected > 0) continue;
+        const capacity = 0.2 + c.wealth * 0.6 + c.health * 0.4;
+        const drift = 0.00055 * capacity * alert * (this.difficulty.resist || 1);
+        c.resistance = Math.min(0.85, c.resistance + drift * eff.resistDrift * dt);
+        if (!isFinite(c.resistance) || c.resistance < 0) c.resistance = 0;
+      }
+    }
+
     // ---- transmission to new countries ----
     const infectedList = this.infectedCountries();
-    const travelScale = 1;
 
     for (const src of infectedList) {
-      if (src.infected / Math.max(1, src.pop) < 0.004) continue;
-      const pressure = Math.min(1, src.infected / src.pop * 12 + 0.15);
+      // a country that recently had a huge outbreak still exports the pathogen
+      // through fleeing travellers, cargo and contaminated surfaces
+      const active = Math.max(src.infected, src.peakInfected * 0.12);
+      if (active / Math.max(1, src.pop) < 0.004) continue;
+      const pressure = Math.min(1, active / src.pop * 12 + 0.15);
 
-      // land
-      if (!src.closedLand) {
+      // land — a closed border slows traffic but never stops it completely
+      const landMult = src.closedLand ? 0.12 : 1;
+      if (landMult > 0) {
         for (const target of this.landAdj.get(src.name) || []) {
           const t = this.countries.get(target);
           if (!t || t.infected > 0) continue;
-          const p = 0.021 * eff.infect * pressure * this.difficulty.spread * dt;
+          const p = 0.013 * eff.infect * pressure * this.difficulty.spread
+            * eff.travel * eff.spread * landMult * dt;
           if (Math.random() < p) this.infectCountry(t, src);
         }
       }
 
       // air / sea
       const hubs = this.seaAdj.get(src.name);
-      if (hubs && !src.closedAir) {
+      const airMult = src.closedAir ? 0.1 : 1;
+      if (hubs && airMult > 0) {
         for (const target of hubs) {
           const t = this.countries.get(target);
           if (!t || t.infected > 0) continue;
           const reach = FLIGHT_HUBS[src.name];
           const reachFactor = reach ? reach.reach / 55 : 0.5;
-          const p = 0.0062 * eff.infect * reachFactor * pressure * this.difficulty.spread * dt;
+          const p = 0.0038 * eff.infect * reachFactor * pressure * this.difficulty.spread
+            * eff.travel * eff.spread * airMult * dt;
           if (Math.random() < p) this.infectCountry(t, src);
         }
       }
@@ -402,7 +506,7 @@ class Game {
       this.finish(true, 'Every last human is dead. Total extinction achieved.');
     }
     // stalemate: the outbreak has stalled for a very long time
-    if (this.day > 1500 && now.healthy > now.total * 0.002) {
+    if (this.day > 2600 && now.healthy > now.total * 0.002) {
       this.finish(false, 'The outbreak stalled. Humanity adapts, endures, and rebuilds.');
     }
     if (this.researchProgress >= 100 && !this.won) {
@@ -454,16 +558,21 @@ class Game {
     // humanity needs samples: live cases, or a large enough body of data
     if (infectedFrac < 0.0015 && deadFrac < 0.01) return;
 
-    const visibility = 0.28 + sev * 0.012 + deadFrac * 7 + discoveredFrac * 0.45;
+    const eff = this.getEffect();
+    const visibleSeverity = sev * (1 - eff.stealth);   // stealth symptoms hide the damage
+    const visibility = 0.28 + visibleSeverity * 0.012 + deadFrac * 7 + discoveredFrac * 0.45;
     const effort = (0.012 + infectedFrac * 0.9) * visibility;
     let rate = effort * this.difficulty.research * this.difficulty.cureSpeed * 0.42;
+    rate /= Math.max(0.3, eff.curePersist);          // information warfare, prion latency, nanobots
     // as society collapses there is nobody left to staff the labs
     rate *= Math.max(0.08, 1 - deadFrac * 0.92);
     // wealthy, healthy nations contribute more
     rate *= 0.6 + (1 - Math.min(1, now.infected / now.total)) * 0.8;
     if (this.researchStalled) rate *= 0.35;
 
+    if (!isFinite(rate) || rate < 0) rate = 0;
     this.researchProgress = Math.min(100, this.researchProgress + rate * dt);
+    if (!isFinite(this.researchProgress)) this.researchProgress = 0;
     if (this.researchProgress >= 100) this.finish(false, 'A cure has been developed. Humanity survives.');
   }
 
@@ -478,7 +587,11 @@ class Game {
       `${deadPct}% of ${pick.name}'s population has died.`,
       `Borders under strain as ${pick.name} struggles to contain spread.`,
       `Panic buying reported across ${pick.name}.`,
-      `WHO: "The situation in ${pick.name} is deteriorating rapidly."`
+      `WHO: "The situation in ${pick.name} is deteriorating rapidly."`,
+      ...(pick.resistance > 0.3 ? [
+        `Population immunity in ${pick.name} now estimated at ${Math.round(pick.resistance * 100)}%.`,
+        `${pick.name} reports its adapted population is resisting new infections.`
+      ] : [])
     ];
     const msg = options[Math.floor(Math.random() * options.length)];
     this.addNews(msg, 'info');
@@ -498,19 +611,51 @@ class Game {
   getCountryVisual(name) {
     const c = this.countries.get(name);
     if (!c) return { fill: '#16232f', infected: false };
-    if (c.infected <= 0 && c.dead <= 0) return { fill: '#16232f', infected: false };
+    const res = c.resistance || 0;
+
+    // Uninfected countries drift steel-blue as their population adapts
+    if (c.infected <= 0 && c.dead <= 0) {
+      if (res > 0.04) {
+        return {
+          fill: mix('#141f2b', '#2b4d69', Math.min(1, res * 1.5)),
+          stroke: `rgba(120,195,240,${0.22 + res * 0.7})`,
+          infected: false,
+          resistance: res
+        };
+      }
+      return { fill: '#16232f', infected: false };
+    }
+
     const infFrac = c.infected / c.pop;
     const deadFrac = c.dead / c.pop;
+    let fill, stroke;
+
     if (deadFrac > 0.02) {
-      const t = Math.min(1, deadFrac * 3);
-      return { fill: mix('#5c1410', '#150607', t), stroke: 'rgba(255,60,50,0.95)', infected: true };
+      fill = mix('#5c1410', '#150607', Math.min(1, deadFrac * 3));
+      stroke = 'rgba(255,60,50,0.95)';
+    } else if (infFrac > 0.4) {
+      fill = '#a52418'; stroke = 'rgba(255,120,90,0.95)';
+    } else if (infFrac > 0.15) {
+      fill = '#c23a1f'; stroke = 'rgba(255,150,100,0.95)';
+    } else if (infFrac > 0.03) {
+      fill = '#d9622b'; stroke = 'rgba(255,180,120,0.95)';
+    } else if (infFrac > 0.005) {
+      fill = '#e08a3c'; stroke = 'rgba(255,200,150,0.9)';
+    } else {
+      fill = '#b8703a'; stroke = 'rgba(255,210,170,0.85)';
     }
-    if (infFrac > 0.4) return { fill: '#a52418', stroke: 'rgba(255,120,90,0.95)', infected: true };
-    if (infFrac > 0.15) return { fill: '#c23a1f', stroke: 'rgba(255,150,100,0.95)', infected: true };
-    if (infFrac > 0.03) return { fill: '#d9622b', stroke: 'rgba(255,180,120,0.95)', infected: true };
-    if (infFrac > 0.005) return { fill: '#e08a3c', stroke: 'rgba(255,200,150,0.9)', infected: true };
-    return { fill: '#b8703a', stroke: 'rgba(255,210,170,0.85)', infected: true };
+
+    // Human resistance always shows through: the more a population has
+    // adapted, the more the infection colour is pushed toward cold steel.
+    if (res > 0.05) {
+      const t = Math.min(0.62, res * 0.75);
+      fill = mix(fill.startsWith('#') ? fill : '#a52418', '#2f5f80', t);
+      if (res > 0.35) stroke = `rgba(150,205,240,${0.5 + res * 0.5})`;
+    }
+
+    return { fill, stroke, infected: true, resistance: res };
   }
+
 }
 
 function hexToRgb(h) {

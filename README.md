@@ -70,10 +70,11 @@ The repo already contains `firebase.json` and `.firebaserc`.
 | --- | --- |
 | **1. Pick a pathogen** | Bacteria (balanced), Virus (free mutations), Fungus (humid-climate monster), Parasite (extra DNA from deaths). |
 | **2. Pick a difficulty** | Casual → Normal → Brutal → Nightmare. Higher difficulty means less DNA and faster researchers. |
-| **3. Pick patient zero** | Small, poor, tropical countries are the forgiving starts. Greenland and Madagascar are the classics for a reason. |
-| **4. Evolve** | Spend DNA on **Transmission** (air, water, insects, livestock, rodents, blood, extreme environments) to reach new countries, and **Symptoms** to raise severity and lethality. |
-| **5. Survive** | The world starts researching once it notices you. Visible, deadly symptoms speed the cure up — **spread first, kill later**. |
-| **6. Win** | Kill everyone before cure research reaches 100%. |
+| **3. Pick patient zero** | Click any country on the **map picker**, or filter by easy/poor/tropical/island/hard starts. Each pick shows its population, climate, wealth and healthcare, plus an easy→brutal start rating. |
+| **4. Evolve** | Spend DNA across three axes: **Spread** (air, water, insects, livestock, rodents, blood, extreme, zoonotic, spores, vertical, contact, climate adaptation), **Symptoms** (4 tiers, from rashes to multi-organ failure), and **Abilities** (genetics, mobility, immune evasion, pharmacology, logistics, information warfare, weaponisation). |
+| **5. Beat resistance** | Once noticed, populations build **human resistance** — strongest in rich, healthy countries. It blocks new infections and blunts lethality. Counter it with *Immunosuppression*, *Antigenic Shift*, *Drug Tolerance* and friends. |
+| **6. Survive** | Visible, deadly symptoms speed the cure up — **spread first, kill later**. |
+| **7. Win** | Kill everyone before cure research reaches 100%. |
 
 ### Controls
 
@@ -84,7 +85,7 @@ The repo already contains `firebase.json` and `.firebaserc`.
 | Click a country | Inspect it (population, infections, panic, closed borders) |
 | `Space` | Pause / resume |
 | `1` – `4` | Game speed · `0` pause · `5×` fastest |
-| `T` / `Y` / `W` | Transmission · Symptoms · World feed |
+| `T` / `Y` / `A` / `W` | Spread · Symptoms · Abilities · World feed |
 
 ---
 
@@ -96,7 +97,7 @@ public/
 ├── css/style.css       # dark "outbreak monitor" theme, responsive
 └── js/
     ├── world.js        # 180 country outlines (bundled, so file:// works)
-    ├── data.js         # countries, borders, flight hubs, upgrades, difficulties
+    ├── data.js         # countries, borders, flight hubs, 63 upgrades, 10 pathogens
     ├── map.js          # canvas map renderer: pan/zoom, hit-testing, arcs, DNA bubbles
     ├── game.js         # simulation engine (infection, deaths, travel, cure, DNA)
     └── ui.js           # menus, HUD, upgrade tree, country inspector, game loop
@@ -120,6 +121,59 @@ firebase.json           # Firebase Hosting config
   are, and collapses as civilization dies — you can genuinely outrun it.
 * **DNA economy.** A passive trickle plus clickable bubbles that pop up over infected countries.
 
+### Pathogens (10)
+
+| Pathogen | Identity |
+| --- | --- |
+| **Bacteria** | Balanced baseline. |
+| **Virus** | +15% infectivity, free random upgrade every 45 days, −15% DNA. |
+| **Fungus** | ×1.9 in humid countries, +15% DNA, slow elsewhere. |
+| **Parasite** | DNA scales with the death toll. |
+| **Prion** | 50% stealth — invisible for decades. Resistance cannot slow it. ×1.85 lethality, −45% infectivity, cure research 55% slower. |
+| **Nanobot Swarm** | Human immunity is nearly irrelevant (resistance ×0.15). +30% infectivity. |
+| **Protozoa** | Ignores healthcare quality when spreading; favours hot + humid. |
+| **Helminth** | Water transmission doubled, very low severity, −15% lethality. |
+| **Engineered Hybrid** | Rolls one inherited trait from another pathogen at start. |
+| **Bio-Weapon** | +60% lethality, +25% severity — but humanity notices instantly. |
+
+### Human resistance
+
+Every country carries a `resistance` value (0–92%) that grows once the outbreak is
+discovered:
+
+* **Infected countries** adapt through exposure — rich nations mount a stronger response,
+  poor ones adapt through sheer spread.
+* **Uninfected countries** build preparedness once cure research begins (vaccination,
+  screening, behaviour change).
+* Resistance **blocks new infections** (down to 20% of normal rate at max) and blunts
+  lethality by up to ~58%.
+* It is **visible on the map** — infected countries desaturate toward cold steel-blue as their
+  population adapts, and uninfected countries drift blue as they prepare.
+* It is **countered** by `resistPierce` abilities (Immunosuppression, Antigenic Shift,
+  Multidrug Efflux — up to 95% pierced) and slowed by `resistDrift` evolutions and by
+  pathogens with high `drugResist`.
+
+### Difficulty actually matters
+
+Because resistance is wired to `difficulty.resist` and cure research to `cureSpeed`, the four
+settings diverge sharply. Measured with two bot players on the same 12 pathogen/country pairs:
+
+| Difficulty | Naive player (ignores resistance) | Smart player |
+| --- | --- | --- |
+| Casual | 100% | 100% |
+| Normal | 100% | 100% |
+| Brutal | 50% | 100% |
+| Nightmare | 17% | 58% |
+
+Playing the same lone strategy across difficulties (buy only cheap infectivity upgrades):
+
+| Difficulty | Outcome |
+| --- | --- |
+| Casual | 100% dead, win at day 1002 |
+| Normal | cure wins at day 497, only 5% dead |
+| Brutal | cure wins at day 535, only 3% dead |
+| Nightmare | cure wins at day 459, only 1% dead |
+
 ---
 
 ## Tips
@@ -130,6 +184,10 @@ firebase.json           # Firebase Hosting config
   they will accept your plague.
 * At the end, once the world is fully infected, pile on lethality. There is no reason to be
   subtle once everyone is a host.
+* **Resistance is the real final boss.** Buy immune-evasion abilities before the death toll
+  stalls — a population at 80% resistance will barely accept new infections.
+* Prion and Bio-Weapon are opposite puzzles: one hides so well the world forgets to research,
+  the other is so loud you must outrun the cure.
 
 ---
 

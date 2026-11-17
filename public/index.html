@@ -36,11 +36,17 @@
 
       <section class="panel">
         <h2>3 · Patient zero</h2>
-        <p class="hint">Pick a starting country. Isolated, cold, wealthy nations are the toughest starts.</p>
+        <p class="hint">Click a country on the map to begin there. Isolated, cold, wealthy nations are the toughest starts.</p>
         <div class="start-picker">
           <select id="startCountry" class="select"></select>
           <button id="randomStart" class="btn ghost" type="button">Random</button>
         </div>
+        <div class="start-filters" id="startFilters"></div>
+        <div class="map-picker-wrap">
+          <canvas id="pickMap"></canvas>
+          <div id="pickHint" class="pick-hint">Click a country to choose your starting point</div>
+        </div>
+        <div id="pickCard" class="pick-card hidden"></div>
         <div class="menu-actions">
           <button id="playBtn" class="btn primary big" type="button">Begin outbreak</button>
           <button id="howBtn" class="btn ghost" type="button">How to play</button>
@@ -76,6 +82,10 @@
       <div class="stat">
         <span class="stat-label">Healthy</span>
         <span class="stat-value" id="hudHealthy">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label" title="Average human resistance to your pathogen">Resistance</span>
+        <span class="stat-value resist" id="hudResist">0%</span>
       </div>
     </div>
 
@@ -114,8 +124,9 @@
 
     <aside id="sidebar">
       <nav id="tabs">
-        <button data-tab="transmission" class="tab active">Transmission</button>
+        <button data-tab="transmission" class="tab active">Spread</button>
         <button data-tab="symptoms" class="tab">Symptoms</button>
+        <button data-tab="abilities" class="tab">Abilities</button>
         <button data-tab="news" class="tab">World</button>
       </nav>
       <div id="tabBody" class="tab-body"></div>
@@ -160,6 +171,7 @@
         <li><strong>Evolve</strong> transmission vectors (air, water, insects…) to jump between countries, and symptoms to raise severity and lethality.</li>
         <li><strong>Spread</strong> happens automatically — infections grow, then travel by land, air and sea. Click a country on the map to inspect it.</li>
         <li><strong>Cure research</strong> starts once humanity notices you. High severity makes you noticeable <em>and</em> deadly, but speeds up the cure — balance is everything.</li>
+        <li><strong>Human resistance</strong> grows wherever the outbreak is noticed — strongest in rich, healthy countries. It blocks new infections and blunts lethality. Fight it with <em>Abilities</em> such as Immunosuppression, Antigenic Shift and Drug Tolerance.</li>
         <li><strong>Win</strong> by killing everyone before the cure reaches 100%.</li>
       </ol>
       <ul class="tips">
@@ -167,6 +179,8 @@
         <li>Space = pause/resume. Keys 1–4 set game speed.</li>
         <li>Small, poor, tropical countries are easiest to hide in early game.</li>
         <li>Panicked countries close their borders — spread early, kill late.</li>
+        <li>Ten pathogens play very differently: a <strong>prion</strong> is nearly invisible for decades, a <strong>nanobot swarm</strong> ignores immunity, a <strong>prion or bio-weapon</strong> trades stealth for raw lethality.</li>
+        <li>The map shows resistance: countries drift <span style="color:#7fc8ee">steel blue</span> as their populations adapt.</li>
       </ul>
     </div>
     <div class="overlay-actions">
