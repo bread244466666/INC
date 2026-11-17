@@ -505,6 +505,12 @@ const FLIGHT_HUBS = {
      spread                      multiplier on inter-country travel chance
 */
 const TRANSMISSIONS = [
+  { id: 'surface1', name: 'Surface Persistence', branch: 'air', tier: 1, cost: 7,
+    desc: 'Survives on shared surfaces between contacts.', effect: { infect: 1.25, wealth: 0.1 } },
+  { id: 'surface2', name: 'Biofilm Shield', branch: 'air', tier: 2, cost: 14, requires: 'surface1',
+    desc: 'Protective films help resist cleaning and disinfectants.', effect: { infect: 1.3, wealth: 0.18 } },
+  { id: 'water4', name: 'Wastewater Cycle', branch: 'water', tier: 4, cost: 21, requires: 'water3',
+    desc: 'Persists through sewage treatment and urban water systems.', effect: { infect: 1.35, wealth: 0.2, humid: 0.2 } },
   /* ---------- Air ---------- */
   { id: 'air1', name: 'Air 1', branch: 'air', tier: 1, cost: 4,
     desc: 'Pathogen spreads through the air, increasing infectivity.',
@@ -620,6 +626,14 @@ const TRANSMISSIONS = [
 /* ---------------- Symptoms ----------------
    Effect keys: infect, severity, lethality, resistDrift, stealth, resistPierce */
 const SYMPTOMS = [
+  { id: 'fatigue', name: 'Fatigue', tier: 1, cost: 5,
+    desc: 'Subtle exhaustion prolongs exposure before people seek care.', effect: { infect: 1.15, severity: 1, stealth: 0.05 } },
+  { id: 'brainfog', name: 'Cognitive Fog', tier: 2, cost: 11, requires: 'fatigue',
+    desc: 'Impaired judgement undermines isolation.', effect: { infect: 1.25, severity: 5 } },
+  { id: 'inflammation', name: 'Systemic Inflammation', tier: 3, cost: 17, requires: 'fever',
+    desc: 'A runaway inflammatory response damages organs.', effect: { severity: 9, lethality: 6 } },
+  { id: 'collapse', name: 'Circulatory Collapse', tier: 4, cost: 28, requires: 'inflammation',
+    desc: 'Blood pressure fails as organ damage spreads.', effect: { severity: 15, lethality: 16 } },
   /* ---------- Tier 1 ---------- */
   { id: 'rash', name: 'Rashes', tier: 1, cost: 5, requires: null,
     desc: 'Red blotchy skin lesions appear.',
@@ -710,6 +724,12 @@ const SYMPTOMS = [
      resistPierce / resistDrift / stealth
 */
 const ABILITIES = [
+  { id: 'antigenMask', name: 'Antigen Masking', tier: 1, cost: 10, branch: 'stealth',
+    desc: 'Masks surface markers to evade population defenses.', effect: { resistPierce: 0.18, stealth: 0.08 } },
+  { id: 'antigenMask2', name: 'Antigen Remodeling', tier: 2, cost: 18, requires: 'antigenMask', branch: 'stealth',
+    desc: 'Changes surface markers to make immune recognition harder.', effect: { resistPierce: 0.25, infect: 1.15 } },
+  { id: 'urbanAdapt', name: 'Urban Adaptation', tier: 1, cost: 12, branch: 'logistics',
+    desc: 'Adapts to sanitation and dense, wealthy cities.', effect: { wealth: 0.2, infect: 1.12 } },
   { id: 'dna1', name: 'Genetic Recombination', tier: 1, cost: 6, branch: 'genetics',
     desc: 'Rapid recombination converts infection into DNA more efficiently.',
     effect: { dnaMult: 1.35 } },
@@ -751,7 +771,7 @@ const ABILITIES = [
 
   { id: 'bioweapon', name: 'Weaponised Strain', tier: 1, cost: 20, branch: 'weapon',
     desc: 'Deliberately amplified lethality, with no attempt to hide.',
-    effect: { lethMult: 1.5, sevMult: 1.3, infect: 1.1 } }
+    effect: { lethalityMult: 1.5, severityMult: 1.3, infect: 1.1 } }
 ];
 
 /* ---------------- Difficulty presets ---------------- */
@@ -781,11 +801,11 @@ const PLAGUE_TYPES = [
   },
   {
     id: 'virus', name: 'Virus',
-    desc: 'Mutates constantly — free random symptom unlocks.',
+    desc: 'Mutates frequently — a chance of free random upgrades.',
     dnaBonus: 0.85, infectMult: 1.15, lethalityMult: 1.1, severityMult: 1.0,
     drugResist: 1.1, stealthBase: 0, curePersist: 1,
-    special: 'Random mutation every 45 days.',
-    notes: ['+15% infectivity', 'Free random upgrades every 45 days', '−15% DNA income']
+    special: '55% chance of a random mutation every 45 days.',
+    notes: ['+15% infectivity', 'Frequent free random upgrades', '−15% DNA income']
   },
   {
     id: 'fungus', name: 'Fungus',

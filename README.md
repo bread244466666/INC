@@ -98,7 +98,7 @@ public/
 ├── css/style.css       # dark "outbreak monitor" theme, responsive
 └── js/
     ├── world.js        # 180 country outlines (bundled, so file:// works)
-    ├── data.js         # countries, borders, flight hubs, 63 upgrades, 10 pathogens
+    ├── data.js         # countries, borders, flight hubs, 73 upgrades, 10 pathogens
     ├── map.js          # canvas map renderer: pan/zoom, hit-testing, arcs, DNA bubbles
     ├── game.js         # simulation engine (infection, deaths, travel, cure, DNA)
     └── ui.js           # menus, HUD, upgrade tree, country inspector, game loop
@@ -144,7 +144,13 @@ carry a **pathogen load** that is compared against the destination's immunity:
 * **Recovery** is real: a fraction of the infected clear the pathogen every day. Recovery is fast
   in healthy, wealthy countries, accelerates with resistance and with cure progress, and is
   suppressed by lethality and by immune-evasion abilities. Recovered people are counted separately
-  in the HUD, the inspector and the end-of-game summary.
+  in the HUD, the inspector and the end-of-game summary. They can be reinfected at 75% of
+  the susceptibility of someone never infected; repeat cases generate 25% of normal DNA income.
+* Wealth and healthcare reduce infection rates. Urban and surface adaptations can counter some
+  of the wealth penalty.
+* Genetic diversity has a 12% chance every 45 simulated days to unlock an eligible trait for
+  free while infection is active (55% for viruses). A stylized pathogen model in the World tab
+  changes as traits evolve; it is an illustration, not a scientific visualization.
 
 ### Harder than before
 
@@ -156,7 +162,7 @@ Several changes make the game substantially harder:
 * Full extinction now requires ~99.9% dead rather than chasing a few thousand stragglers
 * Landlocked and island nations are reachable only through the traffic network
 
-Measured with two bots across six pathogen/country pairs:
+Before the reinfection and traffic changes, two bots were measured across six pathogen/country pairs (the current balance has not been re-measured):
 
 | Difficulty | Naive player (ignores resistance) | Smart player |
 | --- | --- | --- |
@@ -220,3 +226,7 @@ discovered:
 
 MIT. Map geometry from the public-domain `world.geo.json` dataset. This is a fan-made homage
 and is not affiliated with Ndemic Creations.
+
+### Simulation smoke test
+
+Run `node tests/simulation.test.js` to check population accounting, reinfection, upgrade prerequisites and traffic.

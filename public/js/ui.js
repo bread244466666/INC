@@ -406,6 +406,7 @@ const App = {
     this.selectedCountry = name;
     this.setTab('news');
     this.renderTab();
+    $('#tabBody').scrollTop = 0;
     if (this.map) this.map.centerOn(name, Math.max(this.map.camera.zoom, 1.8));
   },
 
@@ -531,33 +532,84 @@ const App = {
     return html;
   },
 
+  pathogenModelHtml() {
+    const g = this.game, eff = g.getEffect();
+    const spikes = Math.min(18, 7 + g.unlocked.size);
+    const points = Array.from({ length: spikes }, (_, i) => {
+      const angle = i * 360 / spikes;
+      return `<g transform="rotate(${angle} 60 60)"><path d="M60 28 L60 16"/><circle cx="60" cy="14" r="3"/></g>`;
+    }).join('');
+    const color = eff.lethality >= 15 ? '#e75c52' : eff.severity >= 8 ? '#ffb454' : '#5fd3c4';
+    const shape = ['bacteria', 'helminth', 'prion'].includes(g.plague.id)
+      ? '<ellipse cx="60" cy="60" rx="30" ry="24"/>' : '<circle cx="60" cy="60" r="28"/>';
+    return `<div class="inspector pathogen-model">
+      <h3>Pathogen model</h3>
+      <div class="sub">A stylized illustration, not a scientific model. Traits alter its appearance.</div>
+      <svg viewBox="0 0 120 120" role="img" aria-label="Stylized ${g.plague.name} pathogen with ${g.unlocked.size} evolved traits" style="color:${color}">
+        <g fill="none" stroke="currentColor" stroke-width="2.5">${points}${shape}</g>
+        <circle cx="50" cy="55" r="5" fill="currentColor" opacity=".6"/>
+        <circle cx="70" cy="65" r="7" fill="currentColor" opacity=".45"/>
+        <circle cx="58" cy="74" r="3" fill="currentColor"/>
+      </svg>
+      <div class="sub">${g.plague.name} · ${g.unlocked.size} evolved traits</div>
+    </div>`;
+  },
+
+  countryInspectorHtml(c) {
+    const pct = value => (100 * value / Math.max(1, c.pop)).toFixed(2) + '%';
+    const percent = value => Math.round(value * 100) + '%';
+    const row = (label, value) => `<div class="insp-row"><span>${label}</span><span>${value}</span></div>`;
+    const compartments = [
+      ['Never infected', c.healthy, 'healthy'], ['Currently infected', c.infected, 'infected'],
+      ['Recovered', c.recovered, 'recovered'], ['Dead', c.dead, 'dead']
+    ];
+    const vehicles = this.game.vehicles.filter(v => !v.arrived && (v.from === c.name || v.to === c.name));
+    const inbound = vehicles.filter(v => v.to === c.name);
+    const outbound = vehicles.filter(v => v.from === c.name);
+    const status = c.infected > 0 ? (c.discovered ? 'Outbreak confirmed' : 'Undetected infection')
+      : c.dead > 0 || c.recovered > 0 ? 'No active cases' : 'No reported cases';
+    const detected = c.detectedDay === null ? 'Not yet detected' : 'Day ' + c.detectedDay;
+    return `<section class="inspector country-inspector" aria-label="Country details for ${c.name}">
+      <h3>${c.name}</h3><div class="sub">${status} · ${c.climate} climate</div>
+      <h4>Population breakdown</h4>
+      ${row('Total population', fmtInt(c.pop))}
+      <div class="country-bar" role="img" aria-label="Population breakdown: ${compartments.map(([label, value]) => label + ' ' + pct(value)).join(', ')}">
+        ${compartments.map(([, value, color]) => `<span class="${color}" style="width:${Math.max(0, Math.min(100, value / Math.max(1, c.pop) * 100))}%"></span>`).join('')}
+      </div>
+      ${compartments.map(([label, value, color]) => row(`<span class="country-key ${color}"></span>${label}`, fmtInt(value) + ' (' + pct(value) + ')')).join('')}
+      ${row('Repeat infections (of active cases)', fmtInt(c.reinfected || 0))}
+      <h4>Outbreak activity</h4>
+      <div class="sub">Estimated per day from the latest simulation step; local cases exclude imported infections.</div>
+      ${row('New local cases / day', fmtInt(c.localCasesPerDay || 0))}
+      ${row('Deaths / day', fmtInt(c.deathsPerDay || 0))}
+      ${row('Recoveries / day', fmtInt(c.recoveriesPerDay || 0))}
+      ${row('Peak active infections', fmtInt(c.peakInfected || 0))}
+      ${row('First detected', detected)}
+      <h4>Local conditions</h4>
+      ${row('Wealth', percent(c.wealth))}
+      ${row('Healthcare', percent(c.health))}
+      ${row('Human resistance', percent(c.resistance))}
+      ${row('Panic', percent(c.panic))}
+      <div class="sub country-note">Recovered people remain susceptible at 75% of the original chance. Wealth, healthcare and resistance affect local spread.</div>
+      <h4>Travel and borders</h4>
+      ${row('Aircraft in / out', inbound.filter(v => v.type === 'plane').length + ' / ' + outbound.filter(v => v.type === 'plane').length)}
+      ${row('Ships in / out', inbound.filter(v => v.type === 'ship').length + ' / ' + outbound.filter(v => v.type === 'ship').length)}
+      ${row('Land connections', (this.game.landAdj.get(c.name) || new Set()).size)}
+      ${row('Travel network connections', (this.game.seaAdj.get(c.name) || new Set()).size)}
+      <div class="country-badges">
+        <span class="badge ${c.closedAir ? 'on' : ''}">Air ${c.closedAir ? 'restricted' : 'open'}</span>
+        <span class="badge ${c.closedSea ? 'on' : ''}">Sea ${c.closedSea ? 'restricted' : 'open'}</span>
+        <span class="badge ${c.closedLand ? 'on' : ''}">Land ${c.closedLand ? 'restricted' : 'open'}</span>
+      </div><div class="sub country-note">Restrictions reduce traffic; they do not stop it completely.</div>
+    </section>`;
+  },
+
   newsHtml() {
     let html = '';
-    const name = this.selectedCountry;
-    if (name) {
-      const c = this.game.countries.get(name);
-      if (c) {
-        const infPct = ((c.infected / c.pop) * 100).toFixed(2);
-        const deadPct = ((c.dead / c.pop) * 100).toFixed(2);
-        html += `<div class="inspector">
-          <h3>${c.name}</h3>
-          <div class="sub">${c.climate} climate · wealth ${(c.wealth * 100).toFixed(0)}% · healthcare ${(c.health * 100).toFixed(0)}%</div>
-          <div class="insp-row"><span>Population</span><span>${fmtInt(c.pop)}</span></div>
-          <div class="insp-row"><span>Infected</span><span>${fmtInt(c.infected)} (${infPct}%)</span></div>
-          <div class="insp-row"><span>Dead</span><span>${fmtInt(c.dead)} (${deadPct}%)</span></div>
-          <div class="insp-row"><span>Healthy</span><span>${fmtInt(c.healthy)}</span></div>
-          <div class="insp-row"><span>Panic</span><span>${Math.round(c.panic * 100)}%</span></div>
-          <div class="insp-row"><span>Recovered</span><span>${fmtInt(c.recovered || 0)}</span></div>
-          <div class="insp-row"><span>Human resistance</span><span>${Math.round(c.resistance * 100)}%</span></div>
-          <div class="insp-row"><span>First detected</span><span>${c.detectedDay === null ? 'not yet' : 'day ' + c.detectedDay}</span></div>
-          <div style="margin-top:8px">
-            <span class="badge ${c.closedAir ? 'on' : ''}">Air ${c.closedAir ? 'closed' : 'open'}</span>
-            <span class="badge ${c.closedSea ? 'on' : ''}">Sea ${c.closedSea ? 'closed' : 'open'}</span>
-            <span class="badge ${c.closedLand ? 'on' : ''}">Land ${c.closedLand ? 'closed' : 'open'}</span>
-          </div>
-        </div>`;
-      }
-    }
+    const c = this.game.countries.get(this.selectedCountry);
+    if (c) html += this.countryInspectorHtml(c);
+    else html += '<div class="inspector"><h3>Country details</h3><div class="sub">Click a country on the map to inspect its outbreak, population and borders.</div></div>';
+    html += this.pathogenModelHtml();
     const v = this.game.vehicles || [];
     if (v.length) {
       const air = v.filter(x => x.type === 'plane').length;

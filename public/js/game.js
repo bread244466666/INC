@@ -44,6 +44,7 @@ class Game {
         health: d.h,
         pos: d.pos,
         infected: 0,
+        reinfected: 0,     // current cases that have recovered before
         dead: 0,
         healthy: population,
         discovered: false,
@@ -55,8 +56,9 @@ class Game {
         recovered: 0,       // people who fought off the infection
         peakInfected: 0,    // largest simultaneous case count seen
         detectedDay: null,  // the day this country first reported cases
-        recoveredToday: 0,  // recovered in the last simulated day (for the UI)
-        immunityDeaths: 0   // deaths avoided by resistance (for the inspector)
+        localCasesPerDay: 0, // rates from the latest simulation step, excluding imported cases
+        deathsPerDay: 0,
+        recoveriesPerDay: 0
       });
     }
 
@@ -266,8 +268,8 @@ class Game {
     if (!c) return false;
     const seed = Math.max(1, Math.round(c.pop * 0.00002));
     c.infected = Math.min(c.pop, seed);
+    c.peakInfected = c.infected;
     c.healthy = c.pop - c.infected - (c.recovered || 0);
-    c.detectedDay = 0;
     this.running = true;
     this.speed = DAYS_PER_SECOND[this.speedIdx];
     this.startCountry = countryName;
@@ -286,6 +288,20 @@ class Game {
     this.events.push({ ...ev, day: Math.floor(this.day) });
     if (this.events.length > 40) this.events.shift();
     this.emit('event', ev);
+  }
+
+  // Allocate cases across naive and recovered hosts. Recovered hosts have
+  // 75% of the baseline susceptibility, not permanent immunity.
+  addCases(c, amount) {
+    const weight = c.healthy + c.recovered * 0.75;
+    if (weight <= 0 || amount <= 0) return 0;
+    const naive = Math.min(c.healthy, amount * c.healthy / weight);
+    const repeat = Math.min(c.recovered, amount * c.recovered * 0.75 / weight);
+    c.healthy -= naive;
+    c.recovered -= repeat;
+    c.infected += naive + repeat;
+    c.reinfected += repeat;
+    return naive + repeat;
   }
 
   /* ---------------- main loop ---------------- */
@@ -311,15 +327,18 @@ class Game {
     let newlyDiscovered = [];
 
     for (const c of this.countries.values()) {
+      c.localCasesPerDay = 0;
+      c.deathsPerDay = 0;
+      c.recoveriesPerDay = 0;
       // a chronic reservoir always survives while hosts remain
-      if (c.infected < 1 && c.healthy > 1 && c.dead > 0) c.infected = 1;
+      if (c.infected < 1 && c.healthy > 1 && c.dead > 0) this.addCases(c, 1 - c.infected);
 
       if (c.infected <= 0) {
         c.panic = Math.max(0, c.panic - 0.15 * dt);
         continue;
       }
 
-      const susceptible = c.healthy / Math.max(1, c.pop);   // share still catchable
+      const susceptible = (c.healthy + c.recovered * 0.75) / Math.max(1, c.pop);   // share still catchable
 
       // ---- human resistance ----
       // Grows once the world notices the outbreak: rich, healthy and highly
@@ -344,13 +363,13 @@ class Game {
       }
 
       const residual = c.resistance * (1 - eff.resistPierce);
-      const bodyResistance = 1 - c.health * 0.35 - c.wealth * 0.2;
+      const bodyResistance = Math.max(0.15, 1 - c.health * Math.max(0, 0.35 + eff.health) - c.wealth * Math.max(0, 0.45 - eff.wealth));
       const seasonMult = this.climateBonus(c, eff);
       let rate = 0.055 * eff.infect * seasonMult
         * (this.plague.id === 'fungus' && c.climate === CLIMATE.HUMID ? 1.9 : 1)
         * Math.max(0.15, bodyResistance) * this.difficulty.spread;
       // protozoa ignore healthcare entirely when spreading
-      if (this.plague.id === 'protist') rate *= 1 / Math.max(0.15, bodyResistance) * 0.85;
+      if (this.plague.id === 'protist') rate *= (1 - c.wealth * Math.max(0, 0.45 - eff.wealth)) / bodyResistance * 0.85;
       // prions shrug off adaptive resistance while incubating
       if (!this.plague.prion) rate *= Math.max(0.2, 1 - residual);
       if (c.panic > 0.4) rate *= 0.7;              // people hide, fewer contacts
@@ -358,12 +377,9 @@ class Game {
       if (c.infected > c.peakInfected) c.peakInfected = c.infected;
 
       // weakly damped by remaining susceptibles, so late-stage outbreaks can finish the job
-      const newInfections = Math.min(c.healthy, c.infected * rate * Math.pow(Math.max(susceptible, 1e-9), 0.2) * dt);
-
-      if (newInfections > 0) {
-        c.infected += newInfections;
-        c.healthy = Math.max(0, c.pop - c.infected - c.dead - (c.recovered || 0));
-      }
+      const newInfections = c.infected * rate * Math.pow(Math.max(susceptible, 1e-9), 0.2) * dt;
+      c.localCasesPerDay = this.addCases(c, newInfections) / dt;
+      c.peakInfected = Math.max(c.peakInfected, c.infected);
 
       // deaths — rate rises steeply with lethality
       const lethRating = Math.max(0, eff.lethality);
@@ -375,7 +391,9 @@ class Game {
       // not catching it in the first place — not surviving it once infected
       leth *= Math.max(0.42, 1 - c.resistance * (1 - eff.resistPierce) * 0.42);
       const newDeaths = Math.min(c.infected, c.infected * leth * dt);
+      c.deathsPerDay = newDeaths / dt;
       if (newDeaths > 0) {
+        c.reinfected *= 1 - newDeaths / c.infected;
         c.infected -= newDeaths;
         c.dead += newDeaths;
         c.healthy = Math.max(0, c.pop - c.infected - c.dead - (c.recovered || 0));
@@ -399,10 +417,11 @@ class Game {
       const deathPressure = Math.min(1, Math.max(0, eff2.lethality) * 0.02);
       recoveryRate *= (1 - deathPressure * 0.92);
       const cured = Math.min(c.infected, c.infected * Math.max(0, recoveryRate) * dt);
+      c.recoveriesPerDay = cured / dt;
       if (cured > 0) {
+        c.reinfected *= 1 - cured / c.infected;
         c.infected -= cured;
         c.recovered += cured;
-        c.recoveredToday += cured;
         c.healthy = Math.max(0, c.pop - c.infected - c.dead - c.recovered);
         c.resistance = Math.min(0.9, c.resistance + (cured / Math.max(1, c.pop)) * 0.75);
       }
@@ -411,13 +430,15 @@ class Game {
 
       // passive DNA trickle scaled by how much of the world is infected
       const frac = c.infected / Math.max(1, c.pop);
-      dnaGain += frac * 0.45 * this.difficulty.dna * this.plague.dnaBonus * eff.dnaMult * dt;
+      // Repeat infections yield only one quarter of the usual DNA income.
+      const dnaWeight = 1 - 0.75 * Math.min(1, c.reinfected / Math.max(1, c.infected));
+      dnaGain += frac * dnaWeight * 0.45 * this.difficulty.dna * this.plague.dnaBonus * eff.dnaMult * dt;
 
       // DNA bubbles: infected countries occasionally yield a DNA point
       const bubbleChance = (0.0016 + frac * 0.02) * this.difficulty.dna * this.plague.dnaBonus * eff.dnaMult;
       const bubbleReady = !c.bubbleAt || this.day - c.bubbleAt > 6;
       if (bubbleReady && Math.random() < bubbleChance * dt) {
-        const amount = frac > 0.35 ? 3 : frac > 0.08 ? 2 : 1;
+        const amount = Math.max(0.25, (frac > 0.35 ? 3 : frac > 0.08 ? 2 : 1) * dnaWeight);
         this.dna += amount; this.totalDnaEarned += amount;
         c.bubbleAt = this.day;
         if (this.bubbles.length < 40) this.bubbles.push({ name: c.name, amount, t: 0 });
@@ -426,7 +447,7 @@ class Game {
 
       // parasite bonus: extra DNA from death
       if (newDeaths > 0 && this.plague.id === 'parasite') {
-        dnaGain += newDeaths / Math.max(1, c.pop) * 0.55 * dt;
+        dnaGain += newDeaths / Math.max(1, c.pop) * 0.55 * dnaWeight * dt;
       }
 
       // panic rises with severity + deaths
@@ -490,19 +511,21 @@ class Game {
     // ---- travel: physical planes and ships carry the pathogen ----
     this.updateVehicles(dt, eff);
 
-    // spontaneous mutation for virus
-    if (this.plague.id === 'virus') {
-      this.virusTimer = (this.virusTimer || 0) + dt;
-      if (this.virusTimer > 45) {
-        this.virusTimer = 0;
+    // Genetic diversity can spontaneously unlock an eligible trait. Viruses
+    // mutate more often; other pathogens have a small chance every 45 days.
+    this.mutationTimer = (this.mutationTimer || 0) + dt;
+    while (this.mutationTimer >= 45) {
+      this.mutationTimer -= 45;
+      const chance = this.plague.id === 'virus' ? 0.55 : 0.12;
+      if (st.infected > 0 && Math.random() < chance) {
         const locked = this.allUpgrades().filter(u =>
-          !this.unlocked.has(u.id) &&
-          (!u.requires || this.unlocked.has(u.requires)));
-        if (locked.length && Math.random() < 0.55) {
+          !this.unlocked.has(u.id) && (!u.requires || this.unlocked.has(u.requires)));
+        if (locked.length) {
           const pick = locked[Math.floor(Math.random() * locked.length)];
           this.unlocked.add(pick.id);
           this.effectCache = null;
-          this.addNews(`Viral mutation unlocked ${pick.name} for free.`, 'warn');
+          this.addNews(`Genetic diversity mutated ${pick.name} for free.`, 'warn');
+          this.emit('evolve', pick);
         }
       }
     }
@@ -553,7 +576,7 @@ class Game {
   ------------------------------------------------------------------ */
   spawnInterval(eff) {
     // more evolved pathogens travel far more often
-    return 0.26 / Math.max(0.25, eff.travel * eff.spread);
+    return 0.13 / Math.max(0.25, eff.travel * eff.spread);
   }
 
   updateVehicles(dt, eff) {
@@ -596,7 +619,7 @@ class Game {
     while (this.spawnTimer >= interval) {
       this.spawnTimer -= interval;
       this.spawnVehicle(eff);
-      if (this.vehicles.length > 90) break;
+      if (this.vehicles.length >= 180) { this.spawnTimer = 0; break; }
     }
   }
 
@@ -683,15 +706,13 @@ class Game {
     } else if (dest.infected > 0 && v.infected) {
       // a returning vehicle adds fresh cases to an ongoing outbreak
       const add = Math.max(1, dest.pop * 0.000008 * v.load);
-      dest.infected = Math.min(dest.pop, dest.infected + add);
-      dest.healthy = Math.max(0, dest.pop - dest.infected - dest.dead - (dest.recovered || 0));
+      this.addCases(dest, add);
     }
   }
 
   infectCountry(c, src, via) {
     const seedCount = Math.max(1, Math.min(c.pop * 0.0004, 4000));
-    c.infected = seedCount;
-    c.healthy = Math.max(0, c.pop - seedCount - c.dead - (c.recovered || 0));
+    if (this.addCases(c, seedCount) <= 0) return;
     c.discovered = c.discovered || false;
     c.panic = Math.max(c.panic, 0.12);
     if (src) {
