@@ -556,3 +556,22 @@ button { font-family: inherit; cursor: pointer; }
   .stat-value { font-size: 15px; }
   .spd { min-width: 26px; padding: 6px 5px; font-size: 10px; }
 }
+
+/* A schematic that changes as the pathogen evolves. */
+.pathogen-model svg { display: block; width: 120px; height: 120px; margin: 8px auto; }
+.pathogen-model .sub:last-child { text-align: center; }
+
+/* Country population, outbreak and travel details. */
+.country-inspector h4 { margin: 14px 0 5px; color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.country-inspector .insp-row { gap: 10px; }
+.country-inspector .insp-row > span:last-child { text-align: right; white-space: nowrap; }
+.country-bar { display: flex; width: 100%; height: 7px; margin: 8px 0; overflow: hidden; border-radius: 4px; background: rgba(255,255,255,.08); }
+.country-bar span { height: 100%; }
+.country-key { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
+.country-bar .healthy, .country-key.healthy { background: #81b4cf; }
+.country-bar .infected, .country-key.infected { background: #e45c49; }
+.country-bar .recovered, .country-key.recovered { background: #5fd3a9; }
+.country-bar .dead, .country-key.dead { background: #7a7c8f; }
+.country-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.country-badges .badge { margin: 0; }
+.country-inspector .country-note { margin: 8px 0 0; line-height: 1.45; }
