@@ -156,7 +156,74 @@ button { font-family: inherit; cursor: pointer; }
 .choice-desc { font-size: 12px; color: var(--muted); line-height: 1.45; display: block; }
 .choice-special { font-size: 11px; color: var(--accent); margin-top: 6px; display: block; letter-spacing: 0.02em; }
 
-.start-picker { display: flex; gap: 10px; margin-bottom: 16px; }
+.start-picker { display: flex; gap: 10px; margin-bottom: 10px; }
+
+/* ---------------- map-based patient-zero picker ---------------- */
+.start-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.filter-chip {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  transition: all 0.16s;
+}
+.filter-chip:hover { color: var(--text); border-color: rgba(140, 200, 240, 0.45); }
+.filter-chip.active {
+  color: #0b1620;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.map-picker-wrap {
+  position: relative;
+  height: clamp(220px, 34vh, 340px);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #08131f;
+  margin-bottom: 10px;
+}
+#pickMap { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+.pick-hint {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  font-size: 11.5px;
+  color: #9fbdd2;
+  background: rgba(5, 12, 19, 0.8);
+  border: 1px solid var(--line);
+  padding: 5px 12px;
+  border-radius: 20px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.pick-card {
+  border: 1px solid rgba(255, 180, 84, 0.45);
+  background: rgba(255, 180, 84, 0.07);
+  border-radius: 10px;
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+}
+.pick-card h4 { margin: 0 0 6px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.pick-card .pc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 14px; }
+.pick-card .pc-row { display: flex; justify-content: space-between; color: var(--muted); font-size: 11.5px; }
+.pick-card .pc-row b { color: var(--text); }
+.difficulty-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.difficulty-tag.easy { background: rgba(89, 196, 106, 0.18); color: #7ddb8c; }
+.difficulty-tag.moderate { background: rgba(255, 180, 84, 0.18); color: #ffc978; }
+.difficulty-tag.hard { background: rgba(228, 70, 47, 0.18); color: #f08a76; }
+.difficulty-tag.brutal { background: rgba(160, 60, 200, 0.2); color: #cf9ef0; }
 .select {
   flex: 1;
   background: rgba(6, 14, 22, 0.9);
@@ -196,6 +263,7 @@ button { font-family: inherit; cursor: pointer; }
 .stat-value { font-size: clamp(15px, 1.7vw, 20px); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stat-value.dna { color: var(--dna); }
 .stat-value.dead { color: #ef6a55; }
+.stat-value.resist { color: #7fc8ee; }
 
 .hud-cure { flex: 0 1 260px; min-width: 150px; }
 .cure-top { display: flex; justify-content: space-between; font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 5px; }
@@ -266,8 +334,8 @@ button { font-family: inherit; cursor: pointer; }
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--muted);
-  padding: 11px 4px;
-  font-size: 11.5px;
+  padding: 11px 2px;
+  font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
@@ -343,6 +411,7 @@ button { font-family: inherit; cursor: pointer; }
 .sys-sev i { background: linear-gradient(90deg, #e0a63c, #e4462f); }
 .sys-let i { background: linear-gradient(90deg, #e4462f, #8c1410); }
 .sys-inf i { background: linear-gradient(90deg, #4bb7d8, #5fd3c4); }
+.sys-res i { background: linear-gradient(90deg, #2f7fa8, #8fd8f5); }
 
 /* news */
 .news-item {

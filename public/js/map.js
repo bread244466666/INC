@@ -35,6 +35,8 @@ class WorldMap {
     this.state = null;     // set by game for coloring
     this.arcs = [];
     this.pulses = [];
+    this.dimmed = null;      // { keep: Set } — dim everything not in keep
+    this.marker = null;      // { name } — highlight the picked start country
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     this.buildPaths();
@@ -298,11 +300,40 @@ class WorldMap {
         lw = 2 / c.zoom;
       }
 
+      // picker filter: dim countries that do not match
+      let dim = false;
+      if (this.dimmed && !this.dimmed.keep.has(p.name)) {
+        dim = true;
+        fill = '#0d1620';
+        stroke = 'rgba(90,130,165,0.18)';
+      }
+      if (this.marker === p.name) {
+        fill = '#8a2b1c';
+        stroke = 'rgba(255,190,140,1)';
+        lw = 2.4 / c.zoom;
+      }
+
       ctx.fillStyle = fill;
       ctx.fill(p.path);
       ctx.strokeStyle = stroke;
       ctx.lineWidth = lw;
       ctx.stroke(p.path);
+
+      // pulsing ring on the chosen patient-zero country
+      if (this.marker === p.name) {
+        const cx = (p.bbox.minX + p.bbox.maxX) / 2;
+        const cy = (p.bbox.minY + p.bbox.maxY) / 2;
+        const r = (12 + Math.sin(time * 3) * 4) / c.zoom;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,190,140,0.85)';
+        ctx.lineWidth = 1.8 / c.zoom;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3 / c.zoom, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,220,180,1)';
+        ctx.fill();
+      }
     }
 
     // transmission arcs
@@ -396,6 +427,9 @@ class WorldMap {
 
     ctx.restore();
   }
+
+  setDimmed(dimmed) { this.dimmed = dimmed; }
+  setMarker(name) { this.marker = name ? { name } : null; }
 
   worldCenterOf(name) {
     const e = this.byName.get(name);

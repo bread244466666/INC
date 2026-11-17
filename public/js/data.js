@@ -496,185 +496,371 @@ const FLIGHT_HUBS = {
   'French Southern and Antarctic Lands': { reach: 2, hubs: ['France','Madagascar','Australia','South Africa'] }
 };
 
-/* ---------------- Transmission / symptom upgrades ---------------- */
+/* ---------------- Transmission / symptom upgrades ---------------- *//* ---------------- Transmission upgrades ----------------
+   Effect keys:
+     infect  multiplier on infectivity
+     hot / cold / arid / humid   climate bonuses
+     health / wealth             target-population modifiers
+     resistDrift                 slows human resistance growth globally
+     spread                      multiplier on inter-country travel chance
+*/
 const TRANSMISSIONS = [
-  {
-    id: 'air1', name: 'Air 1', branch: 'air', tier: 1, cost: 4,
+  /* ---------- Air ---------- */
+  { id: 'air1', name: 'Air 1', branch: 'air', tier: 1, cost: 4,
     desc: 'Pathogen spreads through the air, increasing infectivity.',
-    effect: { infect: 1.35, hot: 0.1, cold: 0.1, arid: 0.1, humid: 0.1 }
-  },
-  {
-    id: 'air2', name: 'Air 2', branch: 'air', tier: 2, cost: 9, requires: 'air1',
+    effect: { infect: 1.35, hot: 0.1, cold: 0.1, arid: 0.1, humid: 0.1 } },
+  { id: 'air2', name: 'Air 2', branch: 'air', tier: 2, cost: 9, requires: 'air1',
     desc: 'Aerosolised spores drift on the wind.',
-    effect: { infect: 1.55, hot: 0.2, cold: 0.2, arid: 0.2, humid: 0.2 }
-  },
-  {
-    id: 'water1', name: 'Water 1', branch: 'water', tier: 1, cost: 4,
+    effect: { infect: 1.55, hot: 0.2, cold: 0.2, arid: 0.2, humid: 0.2 } },
+  { id: 'air3', name: 'Air 3', branch: 'air', tier: 3, cost: 18, requires: 'air2',
+    desc: 'Fine-particle aerosols bypass surgical masks entirely.',
+    effect: { infect: 1.75, hot: 0.3, cold: 0.3, arid: 0.3, humid: 0.3, spread: 1.25 } },
+
+  /* ---------- Water ---------- */
+  { id: 'water1', name: 'Water 1', branch: 'water', tier: 1, cost: 4,
     desc: 'The pathogen survives in fresh water supplies.',
-    effect: { infect: 1.35, humid: 0.35 }
-  },
-  {
-    id: 'water2', name: 'Water 2', branch: 'water', tier: 2, cost: 9, requires: 'water1',
+    effect: { infect: 1.35, humid: 0.35 } },
+  { id: 'water2', name: 'Water 2', branch: 'water', tier: 2, cost: 9, requires: 'water1',
     desc: 'Contaminates oceans and reservoirs worldwide.',
-    effect: { infect: 1.55, humid: 0.6 }
-  },
-  {
-    id: 'insect1', name: 'Insect 1', branch: 'insect', tier: 1, cost: 5,
+    effect: { infect: 1.55, humid: 0.6 } },
+  { id: 'water3', name: 'Water 3', branch: 'water', tier: 3, cost: 17, requires: 'water2',
+    desc: 'Resists chlorination and municipal filtration.',
+    effect: { infect: 1.7, humid: 0.75, spread: 1.2 } },
+
+  /* ---------- Insect ---------- */
+  { id: 'insect1', name: 'Insect 1', branch: 'insect', tier: 1, cost: 5,
     desc: 'Bloodsucking insects carry the pathogen.',
-    effect: { infect: 1.3, hot: 0.5 }
-  },
-  {
-    id: 'insect2', name: 'Insect 2', branch: 'insect', tier: 2, cost: 10, requires: 'insect1',
+    effect: { infect: 1.3, hot: 0.5 } },
+  { id: 'insect2', name: 'Insect 2', branch: 'insect', tier: 2, cost: 10, requires: 'insect1',
     desc: 'Insect carriers multiply exponentially.',
-    effect: { infect: 1.5, hot: 0.8 }
-  },
-  {
-    id: 'livestock1', name: 'Livestock 1', branch: 'livestock', tier: 1, cost: 5,
+    effect: { infect: 1.5, hot: 0.8 } },
+
+  /* ---------- Livestock ---------- */
+  { id: 'livestock1', name: 'Livestock 1', branch: 'livestock', tier: 1, cost: 5,
     desc: 'Infected livestock spread contagion to farmers.',
-    effect: { infect: 1.3, arid: 0.5 }
-  },
-  {
-    id: 'livestock2', name: 'Livestock 2', branch: 'livestock', tier: 2, cost: 10, requires: 'livestock1',
+    effect: { infect: 1.3, arid: 0.5 } },
+  { id: 'livestock2', name: 'Livestock 2', branch: 'livestock', tier: 2, cost: 10, requires: 'livestock1',
     desc: 'Factory farms become contamination centres.',
-    effect: { infect: 1.5, arid: 0.8 }
-  },
-  {
-    id: 'rodent1', name: 'Rodent 1', branch: 'rodent', tier: 1, cost: 5,
+    effect: { infect: 1.5, arid: 0.8 } },
+
+  /* ---------- Rodent ---------- */
+  { id: 'rodent1', name: 'Rodent 1', branch: 'rodent', tier: 1, cost: 5,
     desc: 'Rodents carry the infection into cities.',
-    effect: { infect: 1.3, cold: 0.4, wealth: 0.1 }
-  },
-  {
-    id: 'rodent2', name: 'Rodent 2', branch: 'rodent', tier: 2, cost: 10, requires: 'rodent1',
+    effect: { infect: 1.3, cold: 0.4, wealth: 0.1 } },
+  { id: 'rodent2', name: 'Rodent 2', branch: 'rodent', tier: 2, cost: 10, requires: 'rodent1',
     desc: 'Rats become a permanent reservoir.',
-    effect: { infect: 1.5, cold: 0.7, wealth: 0.1 }
-  },
-  {
-    id: 'blood1', name: 'Blood 1', branch: 'blood', tier: 1, cost: 6,
+    effect: { infect: 1.5, cold: 0.7, wealth: 0.1 } },
+
+  /* ---------- Blood ---------- */
+  { id: 'blood1', name: 'Blood 1', branch: 'blood', tier: 1, cost: 6,
     desc: 'Spreads through blood and surgical equipment.',
-    effect: { infect: 1.4, health: -0.15 }
-  },
-  {
-    id: 'blood2', name: 'Blood 2', branch: 'blood', tier: 2, cost: 12, requires: 'blood1',
+    effect: { infect: 1.4, health: -0.15 } },
+  { id: 'blood2', name: 'Blood 2', branch: 'blood', tier: 2, cost: 12, requires: 'blood1',
     desc: 'Transmits through transfusions and needles.',
-    effect: { infect: 1.6, health: -0.25 }
-  },
-  {
-    id: 'extreme1', name: 'Extreme Bioaerosol', branch: 'extreme', tier: 1, cost: 8,
+    effect: { infect: 1.6, health: -0.25 } },
+
+  /* ---------- Extreme environments ---------- */
+  { id: 'extreme1', name: 'Extreme Bioaerosol', branch: 'extreme', tier: 1, cost: 8,
     desc: 'Pathogen survives extremes of temperature.',
-    effect: { infect: 1.3, hot: 0.5, cold: 0.5, arid: 0.5 }
-  },
-  {
-    id: 'extreme2', name: 'Extreme Zoonosis', branch: 'extreme', tier: 2, cost: 14, requires: 'extreme1',
+    effect: { infect: 1.3, hot: 0.5, cold: 0.5, arid: 0.5 } },
+  { id: 'extreme2', name: 'Extreme Zoonosis', branch: 'extreme', tier: 2, cost: 14, requires: 'extreme1',
     desc: 'Crosses into many species at once.',
-    effect: { infect: 1.5, hot: 0.7, cold: 0.7, arid: 0.7, wealth: 0.1 }
-  }
+    effect: { infect: 1.5, hot: 0.7, cold: 0.7, arid: 0.7, wealth: 0.1 } },
+
+  /* ---------- Zoonotic (animal reservoir) ---------- */
+  { id: 'zoo1', name: 'Zoonotic Leap', branch: 'zoonotic', tier: 1, cost: 7,
+    desc: 'Jumps from wild animals into rural communities.',
+    effect: { infect: 1.3, arid: 0.4, cold: 0.3 } },
+  { id: 'zoo2', name: 'Wild Reservoir', branch: 'zoonotic', tier: 2, cost: 13, requires: 'zoo1',
+    desc: 'Birds and bats seed new outbreaks from above.',
+    effect: { infect: 1.45, hot: 0.3, cold: 0.3, arid: 0.3, spread: 1.15 } },
+
+  /* ---------- Fungal spores ---------- */
+  { id: 'spore1', name: 'Spore Burst', branch: 'spore', tier: 1, cost: 7,
+    desc: 'Erupts in clouds of infectious spores.',
+    effect: { infect: 1.35, humid: 0.4 } },
+  { id: 'spore2', name: 'Dormant Spores', branch: 'spore', tier: 2, cost: 12, requires: 'spore1',
+    desc: 'Spores lie dormant for years, then reawaken.',
+    effect: { infect: 1.4, humid: 0.5, resistDrift: 0.25 } },
+
+  /* ---------- Vertical (mother to child) ---------- */
+  { id: 'vertical1', name: 'Heritable Transmission', branch: 'vertical', tier: 1, cost: 8,
+    desc: 'Passes from mother to child in the womb.',
+    effect: { infect: 1.2, wealth: 0.15, health: -0.1 } },
+  { id: 'vertical2', name: 'Generational Memory', branch: 'vertical', tier: 2, cost: 14, requires: 'vertical1',
+    desc: 'Inherited infection appears with the first breath.',
+    effect: { infect: 1.3, wealth: 0.25, health: -0.2, resistDrift: 0.2 } },
+
+  /* ---------- Contact / social ---------- */
+  { id: 'contact1', name: 'Direct Contact', branch: 'contact', tier: 1, cost: 4,
+    desc: 'Spreads through touch and shared surfaces.',
+    effect: { infect: 1.3, wealth: 0.15 } },
+  { id: 'contact2', name: 'Social Gathering', branch: 'contact', tier: 2, cost: 9, requires: 'contact1',
+    desc: 'Thrives wherever crowds gather.',
+    effect: { infect: 1.45, wealth: 0.2, spread: 1.1 } },
+
+  /* ---------- Environmental adaptation ---------- */
+  { id: 'adaptHot', name: 'Heat Resistance', branch: 'adapt', tier: 1, cost: 6,
+    desc: 'Outer proteins survive tropical temperatures.',
+    effect: { infect: 1.1, hot: 0.9 } },
+  { id: 'adaptCold', name: 'Cold Resistance', branch: 'adapt', tier: 1, cost: 6,
+    desc: 'Antifreeze proteins protect against freezing.',
+    effect: { infect: 1.1, cold: 0.9 } },
+  { id: 'adaptArid', name: 'Desiccation Resistance', branch: 'adapt', tier: 1, cost: 6,
+    desc: 'Survives in dry air and dust for weeks.',
+    effect: { infect: 1.1, arid: 0.9 } },
+  { id: 'adaptHumid', name: 'Humidity Resistance', branch: 'adapt', tier: 1, cost: 6,
+    desc: 'Thrives in damp air and warm water.',
+    effect: { infect: 1.1, humid: 0.9 } },
+  { id: 'adaptAll', name: 'Pan-Climate Adaptation', branch: 'adapt', tier: 2, cost: 20, requires: 'adaptCold',
+    desc: 'No climate on Earth can stop the pathogen now.',
+    effect: { infect: 1.25, hot: 0.5, cold: 0.5, arid: 0.5, humid: 0.5 } }
 ];
 
+/* ---------------- Symptoms ----------------
+   Effect keys: infect, severity, lethality, resistDrift, stealth, resistPierce */
 const SYMPTOMS = [
-  {
-    id: 'rash', name: 'Rashes', tier: 1, cost: 5, requires: null,
+  /* ---------- Tier 1 ---------- */
+  { id: 'rash', name: 'Rashes', tier: 1, cost: 5, requires: null,
     desc: 'Red blotchy skin lesions appear.',
-    effect: { infect: 1.15, severity: 2, lethality: 0.4 }
-  },
-  {
-    id: 'cough', name: 'Coughing', tier: 1, cost: 6, requires: null,
+    effect: { infect: 1.15, severity: 2, lethality: 0.4 } },
+  { id: 'cough', name: 'Coughing', tier: 1, cost: 6, requires: null,
     desc: 'Continuous coughing aerosolises the pathogen.',
-    effect: { infect: 1.3, severity: 2, lethality: 0.2 }
-  },
-  {
-    id: 'fever', name: 'Fever', tier: 1, cost: 6, requires: null,
+    effect: { infect: 1.3, severity: 2, lethality: 0.2 } },
+  { id: 'fever', name: 'Fever', tier: 1, cost: 6, requires: null,
     desc: 'High temperatures accelerate viral shedding.',
-    effect: { infect: 1.2, severity: 3, lethality: 0.6 }
-  },
-  {
-    id: 'nausea', name: 'Nausea', tier: 1, cost: 5, requires: null,
+    effect: { infect: 1.2, severity: 3, lethality: 0.6 } },
+  { id: 'nausea', name: 'Nausea', tier: 1, cost: 5, requires: null,
     desc: 'Vomiting spreads contaminated fluid.',
-    effect: { infect: 1.2, severity: 3, lethality: 0.3 }
-  },
-  {
-    id: 'sneezing', name: 'Sneezing', tier: 1, cost: 8, requires: 'cough',
+    effect: { infect: 1.2, severity: 3, lethality: 0.3 } },
+  { id: 'sneezing', name: 'Sneezing', tier: 1, cost: 8, requires: 'cough',
     desc: 'Explosive sneezing expels droplets far and wide.',
-    effect: { infect: 1.35, severity: 3, lethality: 0.2 }
-  },
-  {
-    id: 'pneumonia', name: 'Pneumonia', tier: 2, cost: 12, requires: 'cough',
+    effect: { infect: 1.35, severity: 3, lethality: 0.2 } },
+
+  /* ---------- Tier 2 ---------- */
+  { id: 'pneumonia', name: 'Pneumonia', tier: 2, cost: 12, requires: 'cough',
     desc: 'Lungs fill with fluid as the lungs fail.',
-    effect: { infect: 1.15, severity: 8, lethality: 3 }
-  },
-  {
-    id: 'hemorrhage', name: 'Haemorrhage', tier: 2, cost: 14, requires: 'fever',
+    effect: { infect: 1.15, severity: 8, lethality: 3 } },
+  { id: 'hemorrhage', name: 'Haemorrhage', tier: 2, cost: 14, requires: 'fever',
     desc: 'Massive internal bleeding from every orifice.',
-    effect: { infect: 1.25, severity: 10, lethality: 5 }
-  },
-  {
-    id: 'insanity', name: 'Insanity', tier: 2, cost: 13, requires: 'nausea',
+    effect: { infect: 1.25, severity: 10, lethality: 5 } },
+  { id: 'insanity', name: 'Insanity', tier: 2, cost: 13, requires: 'nausea',
     desc: 'Victims become violently unhinged and flee.',
-    effect: { infect: 1.1, severity: 9, lethality: 2 }
-  },
-  {
-    id: 'joint', name: 'Joint Pain', tier: 2, cost: 10, requires: 'rash',
+    effect: { infect: 1.1, severity: 9, lethality: 2 } },
+  { id: 'joint', name: 'Joint Pain', tier: 2, cost: 10, requires: 'rash',
     desc: 'Debilitating joint inflammation.',
-    effect: { infect: 0.95, severity: 5, lethality: 0.5 }
-  },
-  {
-    id: 'tumor', name: 'Tumours', tier: 3, cost: 16, requires: 'rash',
+    effect: { infect: 0.95, severity: 5, lethality: 0.5 } },
+
+  /* ---------- Tier 3 ---------- */
+  { id: 'tumor', name: 'Tumours', tier: 3, cost: 16, requires: 'rash',
     desc: 'Sickening growths form across the body.',
-    effect: { infect: 1.05, severity: 11, lethality: 4 }
-  },
-  {
-    id: 'coma', name: 'Coma', tier: 3, cost: 16, requires: 'insanity',
+    effect: { infect: 1.05, severity: 11, lethality: 4 } },
+  { id: 'coma', name: 'Coma', tier: 3, cost: 16, requires: 'insanity',
     desc: 'Victims fall into an irreversible coma.',
-    effect: { infect: 0.9, severity: 10, lethality: 6 }
-  },
-  {
-    id: 'dysentery', name: 'Dysentery', tier: 3, cost: 18, requires: 'nausea',
+    effect: { infect: 0.9, severity: 10, lethality: 6 } },
+  { id: 'dysentery', name: 'Dysentery', tier: 3, cost: 18, requires: 'nausea',
     desc: 'Severe diarrhoea dehydrates and kills.',
-    effect: { infect: 1.15, severity: 16, lethality: 11 }
-  },
-  {
-    id: 'hypersens', name: 'Hypersensitivity', tier: 3, cost: 15, requires: 'joint',
+    effect: { infect: 1.15, severity: 16, lethality: 11 } },
+  { id: 'hypersens', name: 'Hypersensitivity', tier: 3, cost: 15, requires: 'joint',
     desc: 'Overwhelming immune overreaction.',
-    effect: { infect: 0.85, severity: 14, lethality: 6 }
-  },
-  {
-    id: 'immune', name: 'Immune Escape', tier: 3, cost: 20, requires: 'joint',
+    effect: { infect: 0.85, severity: 14, lethality: 6 } },
+  { id: 'immune', name: 'Immune Escape', tier: 3, cost: 20, requires: 'joint',
     desc: 'The pathogen hides from adaptive immunity.',
-    effect: { infect: 1.25, severity: 7, lethality: 1 }
-  }
+    effect: { infect: 1.25, severity: 7, lethality: 1, resistPierce: 0.35 } },
+
+  /* ---------- Tier 4: neural / prion-style ---------- */
+  { id: 'ataxia', name: 'Ataxia', tier: 4, cost: 20, requires: 'insanity',
+    desc: 'The brain loses control of the body. Movement becomes impossible.',
+    effect: { infect: 0.9, severity: 13, lethality: 7 } },
+  { id: 'amnesia', name: 'Total Amnesia', tier: 4, cost: 22, requires: 'ataxia',
+    desc: 'Victims forget how to eat, drink or run.',
+    effect: { infect: 0.85, severity: 15, lethality: 9, stealth: 0.15 } },
+  { id: 'seizure', name: 'Grand Mal Seizures', tier: 4, cost: 24, requires: 'ataxia',
+    desc: 'Convulsions tear the body apart from within.',
+    effect: { infect: 1.0, severity: 20, lethality: 14 } },
+
+  /* ---------- Tier 4: other apex symptoms ---------- */
+  { id: 'necrosis', name: 'Flesh Necrosis', tier: 4, cost: 26, requires: 'tumor',
+    desc: 'Living tissue dies and sloughs from the bone.',
+    effect: { infect: 1.1, severity: 24, lethality: 16 } },
+  { id: 'organfail', name: 'Multi-Organ Failure', tier: 4, cost: 28, requires: 'dysentery',
+    desc: 'Every organ shuts down in sequence.',
+    effect: { infect: 0.95, severity: 26, lethality: 22 } },
+  { id: 'cytokine', name: 'Cytokine Storm', tier: 4, cost: 25, requires: 'hypersens',
+    desc: 'The immune system attacks the body it was meant to protect.',
+    effect: { infect: 1.05, severity: 22, lethality: 18 } },
+
+  /* ---------- Tier 4: stealth / resistance counter ---------- */
+  { id: 'dormancy', name: 'Dormancy', tier: 4, cost: 20, requires: 'immune',
+    desc: 'Slips into latency and waits out the world\'s immune response.',
+    effect: { infect: 1.1, severity: 2, lethality: 0.5, stealth: 0.25, resistDrift: 0.15 } },
+  { id: 'antigenic', name: 'Antigenic Shift', tier: 4, cost: 24, requires: 'immune',
+    desc: 'Reshapes its surface proteins faster than antibodies can learn them.',
+    effect: { infect: 1.2, severity: 6, lethality: 2, resistPierce: 0.45 } }
+];
+
+/* ---------------- Abilities (third evolution axis) ----------------
+   These do not add infectivity so much as bend the rules.
+   Effect keys:
+     dnaMult        multiplies DNA income
+     curePersist    slows humanity's cure research
+     travel         multiplies inter-country spread chance
+     researchBlock  delays/limits cure research
+     lethMult / sevMult
+     resistPierce / resistDrift / stealth
+*/
+const ABILITIES = [
+  { id: 'dna1', name: 'Genetic Recombination', tier: 1, cost: 6, branch: 'genetics',
+    desc: 'Rapid recombination converts infection into DNA more efficiently.',
+    effect: { dnaMult: 1.35 } },
+  { id: 'dna2', name: 'DNA Scavenging', tier: 2, cost: 12, requires: 'dna1', branch: 'genetics',
+    desc: 'Harvests genetic material from every cell it destroys.',
+    effect: { dnaMult: 1.5 } },
+
+  { id: 'travel1', name: 'Hitching the Airway', tier: 1, cost: 7, branch: 'mobility',
+    desc: 'Latches onto cabin surfaces and ventilation systems.',
+    effect: { travel: 1.4 } },
+  { id: 'travel2', name: 'Cargo Vector', tier: 2, cost: 14, requires: 'travel1', branch: 'mobility',
+    desc: 'Survives weeks in shipping containers and holds.',
+    effect: { travel: 1.7, infect: 1.1 } },
+
+  { id: 'immune1', name: 'Immunosuppression', tier: 1, cost: 9, branch: 'stealth',
+    desc: 'Disables local immune signalling before it is noticed.',
+    effect: { infect: 1.2, resistPierce: 0.3, stealth: 0.1 } },
+  { id: 'immune2', name: 'Mimicry', tier: 2, cost: 16, requires: 'immune1', branch: 'stealth',
+    desc: 'Wears host proteins like a disguise.',
+    effect: { infect: 1.15, resistPierce: 0.5, stealth: 0.2 } },
+
+  { id: 'tolerance', name: 'Drug Tolerance', tier: 1, cost: 10, branch: 'pharma',
+    desc: 'Antivirals and antibiotics become ineffective.',
+    effect: { infect: 1.15, resistPierce: 0.4 } },
+  { id: 'tolerance2', name: 'Multidrug Efflux', tier: 2, cost: 18, requires: 'tolerance', branch: 'pharma',
+    desc: 'Pumps out every treatment humanity can synthesize.',
+    effect: { infect: 1.2, resistPierce: 0.6, lethality: 2 } },
+
+  { id: 'coldchain', name: 'Cold Chain Exploit', tier: 1, cost: 9, branch: 'logistics',
+    desc: 'Uses global vaccine logistics to travel the world.',
+    effect: { travel: 1.5, infect: 1.05 } },
+
+  { id: 'media', name: 'Information Void', tier: 1, cost: 11, branch: 'info',
+    desc: 'Symptoms are mistaken for other illnesses; reporting lags.',
+    effect: { stealth: 0.3, curePersist: 1.25 } },
+  { id: 'misinfo', name: 'Infectious Misinformation', tier: 2, cost: 18, requires: 'media', branch: 'info',
+    desc: 'Denial and conspiracy cripple the public health response.',
+    effect: { stealth: 0.2, curePersist: 1.5 } },
+
+  { id: 'bioweapon', name: 'Weaponised Strain', tier: 1, cost: 20, branch: 'weapon',
+    desc: 'Deliberately amplified lethality, with no attempt to hide.',
+    effect: { lethMult: 1.5, sevMult: 1.3, infect: 1.1 } }
 ];
 
 /* ---------------- Difficulty presets ---------------- */
 const DIFFICULTIES = {
-  casual:   { name: 'Casual',   dna: 1.5, research: 0.5, spread: 0.85, cureSpeed: 0.6, startDna: 10, desc: 'Relaxed. Great for learning the ropes.' },
-  normal:   { name: 'Normal',   dna: 1.0, research: 1.0, spread: 1.0,  cureSpeed: 1.0, startDna: 5,  desc: 'The intended experience. A real fight.' },
-  brutal:   { name: 'Brutal',   dna: 0.7, research: 1.3, spread: 1.2,  cureSpeed: 1.2, startDna: 0,  desc: 'Fast researchers. Will you survive?' },
-  nightmare:{ name: 'Nightmare',dna: 0.5, research: 1.65, spread: 1.4, cureSpeed: 1.5, startDna: 0,  desc: 'Humanity is ready. Good luck.' }
+  casual:   { name: 'Casual',   dna: 1.6, research: 0.45, spread: 0.85, cureSpeed: 0.5, startDna: 12, resist: 0.5, desc: 'Relaxed. Great for learning the ropes.' },
+  normal:   { name: 'Normal',   dna: 1.0, research: 1.3, spread: 1.0,  cureSpeed: 1.7, startDna: 5,  resist: 1.9, desc: 'The intended experience. A real fight.' },
+  brutal:   { name: 'Brutal',   dna: 0.7, research: 1.6, spread: 1.1,  cureSpeed: 1.8, startDna: 0,  resist: 2.7, desc: 'Strong immune systems. Will you survive?' },
+  nightmare:{ name: 'Nightmare',dna: 0.5, research: 2.2, spread: 1.2, cureSpeed: 2.0, startDna: 0,  resist: 2.8, desc: 'Humanity is ready. Good luck.' }
 };
 
-/* ---------------- Plague types ---------------- */
+/* ---------------- Plague / pathogen types ----------------
+   Extra keys understood by the engine:
+     drugResist      multiplier on how fast human resistance develops
+     stealthBase     flat stealth (0..1) that hides severity from researchers
+     curePersist     multiplier on cure research speed
+     prion           cannot be slowed by resistance while incubating
+     custom          human-readable list of special mechanics (shown in UI)
+*/
 const PLAGUE_TYPES = [
   {
-    id: 'bacteria', name: 'Bacteria',
+    id: 'bacteria', name: 'Bacteria', icon: '🦠',
     desc: 'The all-rounder. Cheap to spread, easy to evolve.',
     dnaBonus: 1.0, infectMult: 1.0, lethalityMult: 1.0, severityMult: 1.0,
-    special: 'Balanced across every climate.'
+    drugResist: 1.0, stealthBase: 0, curePersist: 1,
+    special: 'Balanced across every climate.',
+    notes: ['Standard DNA economy', 'No special weaknesses']
   },
   {
-    id: 'virus', name: 'Virus',
+    id: 'virus', name: 'Virus', icon: '🧫',
     desc: 'Mutates constantly — free random symptom unlocks.',
     dnaBonus: 0.85, infectMult: 1.15, lethalityMult: 1.1, severityMult: 1.0,
-    special: 'Random mutation every 45 days.'
+    drugResist: 1.1, stealthBase: 0, curePersist: 1,
+    special: 'Random mutation every 45 days.',
+    notes: ['+15% infectivity', 'Free random upgrades every 45 days', '−15% DNA income']
   },
   {
-    id: 'fungus', name: 'Fungus',
+    id: 'fungus', name: 'Fungus', icon: '🍄',
     desc: 'Hard to spread, but devastating in humid climates.',
     dnaBonus: 1.15, infectMult: 0.85, lethalityMult: 1.2, severityMult: 1.0,
-    special: 'Double infectivity in humid countries.'
+    drugResist: 1.15, stealthBase: 0.08, curePersist: 1.1,
+    special: 'Double infectivity in humid countries.',
+    notes: ['×1.9 infectivity in humid countries', '−15% base infectivity', '+15% DNA income']
   },
   {
-    id: 'parasite', name: 'Parasite',
+    id: 'parasite', name: 'Parasite', icon: '🪱',
     desc: 'Slower spread, but gains extra DNA from deaths.',
     dnaBonus: 1.3, infectMult: 0.9, lethalityMult: 1.15, severityMult: 1.0,
-    special: '+50% DNA earned from the dying.'
+    drugResist: 1.2, stealthBase: 0.05, curePersist: 1,
+    special: '+50% DNA earned from the dying.',
+    notes: ['DNA scales with death toll', '+30% DNA income', '−10% base infectivity']
+  },
+  {
+    id: 'prion', name: 'Prion', icon: '🧠',
+    desc: 'Misfolded protein. Almost impossible to detect, almost impossible to stop.',
+    dnaBonus: 1.1, infectMult: 0.55, lethalityMult: 1.85, severityMult: 0.55,
+    drugResist: 0.6, stealthBase: 0.5, curePersist: 1.55, prion: true,
+    special: 'Invisible for a decade; resistance cannot slow it.',
+    notes: ['50% stealth — researchers barely see it', '−38% infectivity (very slow spread)', '×2.1 lethality once it takes hold', 'Human resistance cannot reduce growth', 'Cure research 55% slower']
+  },
+  {
+    id: 'nanobot', name: 'Nanobot Swarm', icon: '🤖',
+    desc: 'Self-replicating machines. No immune system on Earth can respond.',
+    dnaBonus: 0.9, infectMult: 1.3, lethalityMult: 1.4, severityMult: 1.0,
+    drugResist: 0.15, stealthBase: 0.15, curePersist: 1.35,
+    special: 'Immunity and resistance are almost irrelevant.',
+    notes: ['Resistance barely develops (×0.15)', '+30% base infectivity', 'Cure research 35% slower']
+  },
+  {
+    id: 'protist', name: 'Protozoa', icon: '🔬',
+    desc: 'Single-celled survivor. Thrives in warm, wet and poor regions.',
+    dnaBonus: 1.1, infectMult: 1.05, lethalityMult: 1.05, severityMult: 0.9,
+    drugResist: 1.25, stealthBase: 0.1, curePersist: 1.05,
+    special: 'Ignores healthcare quality when spreading.',
+    notes: ['Healthcare has almost no effect on spread', 'Favours hot + humid climates', 'Resistance develops 25% faster against it']
+  },
+  {
+    id: 'helminth', name: 'Helminth', icon: '🪱',
+    desc: 'A parasitic worm. Few symptoms, enormous reach through water.',
+    dnaBonus: 1.05, infectMult: 1.1, lethalityMult: 0.85, severityMult: 0.7,
+    drugResist: 1.3, stealthBase: 0.18, curePersist: 1.15,
+    special: 'Water and sanitation spread is doubled.',
+    notes: ['Water transmission effects doubled', 'Low severity keeps research slow', '−15% lethality']
+  },
+  {
+    id: 'hybrid', name: 'Engineered Hybrid', icon: '⚗️',
+    desc: 'A lab-grown chimera. Copies the best traits of two other pathogens.',
+    dnaBonus: 1.0, infectMult: 1.1, lethalityMult: 1.1, severityMult: 1.0,
+    drugResist: 1.0, stealthBase: 0.12, curePersist: 1.15,
+    special: 'Gains a random secondary pathogen bonus at start.',
+    notes: ['Rolls one bonus trait from another pathogen', 'Slightly better at everything', '+12% stealth']
+  },
+  {
+    id: 'bioengineered', name: 'Bio-Weapon', icon: '☣️',
+    desc: 'Weaponised and released on purpose. Terrifying, and very visible.',
+    dnaBonus: 0.8, infectMult: 1.25, lethalityMult: 1.6, severityMult: 1.25,
+    drugResist: 0.9, stealthBase: 0, curePersist: 0.85,
+    special: 'Devastating, but humanity notices instantly.',
+    notes: ['+60% lethality, +25% severity', 'Cure research 15% faster', '−20% DNA income']
   }
+];
+
+/* ---------------- Map-picker helpers ---------------- */
+// Country archetypes shown in the patient-zero picker
+const START_ARCHETYPES = [
+  { id: 'any', name: 'Any country', test: () => true },
+  { id: 'easy', name: 'Easy starts', test: (n) => COUNTRIES[n].p >= 40 && COUNTRIES[n].w < 0.45 },
+  { id: 'poor', name: 'Poor + crowded', test: (n) => COUNTRIES[n].w < 0.35 && COUNTRIES[n].p > 20 },
+  { id: 'hot', name: 'Tropical', test: (n) => COUNTRIES[n].c === CLIMATE.HOT },
+  { id: 'cold', name: 'Cold climates', test: (n) => COUNTRIES[n].c === CLIMATE.COLD },
+  { id: 'island', name: 'Isolated islands', test: (n) => n === 'Greenland' || n === 'Madagascar' || n === 'New Zealand' || n === 'Iceland' || n === 'Australia' || n === 'Japan' || n === 'Cuba' || n === 'Sri Lanka' || n === 'Fiji' || n === 'The Bahamas' || n === 'Ireland' || n === 'Malta' || n === 'Cyprus' },
+  { id: 'hard', name: 'Hard starts', test: (n) => COUNTRIES[n].w > 0.7 && COUNTRIES[n].h > 0.7 }
 ];
